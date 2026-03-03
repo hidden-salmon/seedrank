@@ -5,7 +5,7 @@ Thanks for your interest in contributing to Seedrank.
 ## Development setup
 
 ```bash
-git clone https://github.com/seedrank/seedrank.git
+git clone https://github.com/hidde-pipeguru/seedrank.git
 cd seedrank
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -49,7 +49,7 @@ Seedrank uses [ruff](https://docs.astral.sh/ruff/) with rules `E`, `F`, `I`, `UP
 
 ## Reporting bugs
 
-Open an issue at [github.com/seedrank/seedrank/issues](https://github.com/seedrank/seedrank/issues) with:
+Open an issue at [github.com/hidde-pipeguru/seedrank/issues](https://github.com/hidde-pipeguru/seedrank/issues) with:
 
 - What you expected to happen
 - What actually happened

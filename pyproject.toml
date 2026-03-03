@@ -49,8 +49,8 @@ dev = [
 seedrank = "seedrank.cli:app"
 
 [project.urls]
-Repository = "https://github.com/seedrank/seedrank"
-Issues = "https://github.com/seedrank/seedrank/issues"
+Repository = "https://github.com/hidde-pipeguru/seedrank"
+Issues = "https://github.com/hidde-pipeguru/seedrank/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seedrank"]
