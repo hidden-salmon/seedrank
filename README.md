@@ -29,7 +29,7 @@ Claude Code is the brain. Seedrank is the hands.
 ## Install
 
 ```bash
-git clone https://github.com/hidde-pipeguru/seedrank.git
+git clone https://github.com/hidden-salmon/seedrank.git
 cd seedrank
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
@@ -470,7 +470,7 @@ Skills are the orchestration layer — they tell Claude Code **what to do** step
 ## Development
 
 ```bash
-git clone https://github.com/hidde-pipeguru/seedrank.git
+git clone https://github.com/hidden-salmon/seedrank.git
 cd seedrank
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
