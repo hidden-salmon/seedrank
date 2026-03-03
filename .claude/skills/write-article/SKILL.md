@@ -171,7 +171,7 @@ Save the article to the appropriate content directory.
 
 ## Phase 5: Validate
 
-Run the article through validation — now includes legal tiers AND citability checks:
+Run the article through validation — includes legal tiers, citability checks, AND AI-tell detection:
 
 ```
 seedrank validate article content/<type>/$ARGUMENTS.mdx
@@ -181,8 +181,9 @@ Fix any issues:
 - **RED tier** (errors): multiplier claims, disparaging language, unhedged exclusivity — must fix
 - **YELLOW tier** (warnings): undated pricing, unattributed stats — should fix
 - **Citability** (C1-C5): dated facts, comparison tables, FAQ section, answer-first structure, specific numbers
+- **AI tells** (`ai_tell_*`): crutch phrases, meta-commentary, tricolons, gratuitous compliments, diplomatic hedging, excessive date stamps, counting before listing, self-announcing honesty — fix to avoid machine-generated tone
 
-Re-validate until clean.
+Re-validate until clean. For a deeper AI-tell audit, run `/qa-ai-tells content/<type>/$ARGUMENTS.mdx`.
 
 ## Phase 6: Register and Update
 

@@ -140,6 +140,27 @@ Read the entire article as the target persona. Ask yourself:
 
 This is subjective but critical. Technical accuracy without readability is useless.
 
+## Dimension 10: AI-Tell Detection
+
+From the `seedrank validate article` output, check for issues with check names starting with `ai_tell_`:
+
+- **Crutch phrases**: "worth noting", "when it comes to", "let's dive in" — delete and state the point directly
+- **Tricolons**: Three parallel short sentences with identical structure — vary sentence length
+- **Meta-commentary**: Sentences about the article's own structure — delete, headings already orient the reader
+- **Gratuitous compliments**: "X is an impressive project" before criticism — state facts plainly
+- **Diplomatic hedging**: Multiple "it depends" / "both have pros and cons" — make specific recommendations
+- **Self-announcing honesty**: "verified pricing", "honest trade-offs" — just state the fact
+- **Counting before listing**: "Three things matter:" — just list them
+- **Excessive date stamps**: More than 6 "(as of Month Year)" — consolidate into a header note
+
+Also manually check for patterns the automated tool cannot catch:
+- Perfect structural symmetry (every section the same length, every list the same count)
+- FAQ answers that repeat the article body verbatim
+- Missing editorial voice (no genuine opinions or recommendations)
+- Over-explaining obvious concepts for the target audience
+
+For a full AI-tell audit, run `/qa-ai-tells $ARGUMENTS`.
+
 ## Output: Structured Audit Report
 
 Produce a structured report with this format:
@@ -161,6 +182,7 @@ Produce a structured report with this format:
 | 7. Technical/Structure | PASS/WARN | count |
 | 8. Cross-Batch Consistency | PASS/WARN | count |
 | 9. Developer Sniff Test | PASS/WARN | notes |
+| 10. AI-Tell Detection | CLEAN/NEEDS EDITING/REWRITE | count |
 
 ### Critical Issues (must fix)
 Numbered list with exact text, location, and how to fix.
