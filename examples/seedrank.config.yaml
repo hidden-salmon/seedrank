@@ -1,0 +1,170 @@
+# pSEO Configuration — Example
+# Copy this file to your project root as pseo.config.yaml and customize.
+
+product:
+  name: Moonbeam
+  domain: moonbeam.example.com
+  category: Email Marketing
+  tagline: "Email that actually gets read."
+  description: >-
+    Moonbeam is an email marketing platform with AI-powered send-time
+    optimization and built-in deliverability monitoring.
+  pricing_url: "https://moonbeam.example.com/pricing"
+  docs_url: "https://docs.moonbeam.example.com"
+  signup_url: "https://app.moonbeam.example.com"
+
+  features:
+    - name: AI send-time optimization
+      status: live
+      description: Automatically sends emails when each subscriber is most likely to open.
+    - name: Drag-and-drop editor
+      status: live
+      description: Visual email builder with responsive templates.
+    - name: Deliverability monitoring
+      status: live
+      description: Real-time inbox placement tracking across major providers.
+    - name: SMS campaigns
+      status: in_development
+      description: Send SMS alongside email in unified campaigns.
+    - name: Landing page builder
+      status: planned
+      description: Create landing pages for lead capture without a separate tool.
+
+voice:
+  tone:
+    - direct
+    - friendly
+    - confident
+    - helpful
+  cta_style: direct
+  cta_primary: "Start sending"
+  cta_never:
+    - "Get Started"
+    - "Try it now!"
+    - "Sign up for free"
+  banned_words:
+    - supercharge
+    - revolutionize
+    - game-changing
+    - seamless
+    - leverage
+
+personas:
+  - slug: switcher
+    name: The Switcher
+    description: "Currently on another email platform, frustrated with pricing or deliverability."
+    pain_points:
+      - "Paying too much for email marketing"
+      - "Poor deliverability on current platform"
+      - "Complex migration process"
+    search_behavior:
+      - "best mailchimp alternative"
+      - "cheaper email marketing tool"
+
+  - slug: first-timer
+    name: The First-Timer
+    description: "Setting up email marketing for a new business."
+    pain_points:
+      - "Don't know where to start"
+      - "Overwhelmed by feature choices"
+      - "Worried about emails going to spam"
+    search_behavior:
+      - "best email marketing platform"
+      - "how to start email marketing"
+
+competitors:
+  - slug: mailchimp
+    name: Mailchimp
+    domain: mailchimp.com
+    tier: 1
+    strengths:
+      - "Huge brand recognition"
+      - "Large template library"
+    positioning_against: >-
+      Mailchimp is the default choice but gets expensive fast. Moonbeam
+      offers better deliverability at half the cost.
+
+  - slug: convertkit
+    name: ConvertKit
+    domain: convertkit.com
+    tier: 1
+    strengths:
+      - "Creator-focused features"
+      - "Excellent automation builder"
+    positioning_against: >-
+      ConvertKit is great for solo creators. Moonbeam is built for
+      growing teams that need analytics and collaboration.
+
+  - slug: sendgrid
+    name: SendGrid
+    domain: sendgrid.com
+    tier: 2
+    strengths:
+      - "Powerful transactional email API"
+      - "High-volume sending"
+    positioning_against: >-
+      SendGrid is developer-focused infrastructure. Moonbeam is a
+      complete marketing platform with no code required.
+
+content_types:
+  - slug: compare
+    route: "/compare/[slug]"
+    content_dir: compare
+    label: Comparison Pages
+    min_words: 1000
+
+  - slug: guides
+    route: "/guides/[slug]"
+    content_dir: guides
+    label: How-To Guides
+    min_words: 800
+
+  - slug: blog
+    route: "/blog/[slug]"
+    content_dir: blog
+    label: Blog Posts
+    min_words: 1500
+
+legal:
+  company_name: "Moonbeam Inc."
+  corrections_email: "corrections@moonbeam.example.com"
+  data_staleness_days: 90
+  require_affiliate_disclosure: false
+  comparison:
+    require_source_urls: true
+    require_last_verified: true
+    require_disclaimer: true
+    disclaimer_text: >-
+      We research and fact-check every claim in our articles. Pricing and
+      features may change; we update periodically. If you spot an inaccuracy,
+      email {corrections_email}.
+    banned_claims:
+      - "worst email platform"
+      - "scam"
+
+dataforseo:
+  location: 2840
+  language: en
+
+gsc:
+  property_url: "sc-domain:moonbeam.example.com"
+  credentials_path: "credentials.json"
+
+ai_models:
+  - slug: chatgpt
+    model: gpt-4o
+    api_key_env: OPENAI_API_KEY
+    provider: openai
+  - slug: claude
+    model: claude-sonnet-4-20250514
+    api_key_env: ANTHROPIC_API_KEY
+    provider: anthropic
+  - slug: perplexity
+    model: sonar
+    api_key_env: PERPLEXITY_API_KEY
+    provider: perplexity
+    endpoint: "https://api.perplexity.ai"
+  - slug: gemini
+    model: gemini-2.0-flash
+    api_key_env: GEMINI_API_KEY
+    provider: gemini
