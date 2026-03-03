@@ -453,6 +453,7 @@ Seedrank includes Claude Code skills — predefined workflows that orchestrate m
 | `/audit-legal` | Workspace-wide legal compliance audit |
 | `/plan-calendar [count]` | Analyze gaps and build a prioritized content calendar |
 | `/geo-optimize <path>` | Optimize an article for AI model citability (C1-C5 checks + fixes) |
+| `/qa-ai-tells <path>` | Detect AI writing tells — crutch phrases, tricolons, hedging, meta-commentary |
 | `/aeo-monitor` | Run periodic AI visibility monitoring — track brand mentions over time |
 
 ### Typical workflow
@@ -462,6 +463,7 @@ Seedrank includes Claude Code skills — predefined workflows that orchestrate m
 > /plan-calendar 10
 > /write-article mailchimp-vs-moonbeam
 > /review-article content/compare/mailchimp-vs-moonbeam.mdx
+> /qa-ai-tells content/compare/mailchimp-vs-moonbeam.mdx
 > /audit-legal
 ```
 

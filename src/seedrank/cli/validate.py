@@ -156,6 +156,7 @@ def validate_article(
 
     # --- Structural checks (no config needed) ---
     _check_structure(content, issues)
+    _check_ai_tells(content, content_lower, issues)
 
     if cfg:
         _check_voice(content, content_lower, cfg, issues)
@@ -647,6 +648,209 @@ def _check_citability(content: str, content_lower: str, issues: list[dict]) -> N
                     " — add concrete data points"
                 ),
             })
+
+
+def _check_ai_tells(content: str, content_lower: str, issues: list[dict]) -> None:
+    """Detect AI writing tells — patterns that make content read as machine-generated."""
+
+    # --- AI crutch phrases ---
+    crutch_phrases = [
+        "here's what you need to know",
+        "here's the thing",
+        "worth noting",
+        "it's worth noting",
+        "whether you need",
+        "let's dive in",
+        "let's break it down",
+        "let's break down",
+        "in today's landscape",
+        "in today's world",
+        "in today's market",
+        "stands out from",
+        "really shines",
+        "when it comes to",
+        "at the end of the day",
+        "it's important to note",
+        "the bottom line",
+        "in a nutshell",
+    ]
+    found_crutches = []
+    for phrase in crutch_phrases:
+        count = content_lower.count(phrase)
+        if count > 0:
+            found_crutches.append((phrase, count))
+    if found_crutches:
+        details = ", ".join(f"'{p}' ({n}x)" for p, n in found_crutches)
+        issues.append({
+            "level": "warning",
+            "check": "ai_tell_crutch_phrases",
+            "message": f"AI crutch phrases found: {details}",
+        })
+
+    # --- Self-announcing honesty ---
+    honesty_phrases = [
+        "verified pricing",
+        "honest trade-offs",
+        "honest trade-off",
+        "the honest answer",
+        "we honestly",
+        "to be frank",
+        "the truth is",
+        "in all honesty",
+        "let me be real",
+    ]
+    found_honesty = [p for p in honesty_phrases if p in content_lower]
+    if found_honesty:
+        details = ", ".join(f"'{p}'" for p in found_honesty)
+        issues.append({
+            "level": "warning",
+            "check": "ai_tell_self_announcing_honesty",
+            "message": f"Self-announcing honesty (just state the fact): {details}",
+        })
+
+    # --- Meta-commentary ---
+    meta_patterns = [
+        r"this is the section that",
+        r"this guide breaks down",
+        r"this guide will",
+        r"this article breaks down",
+        r"this article will",
+        r"in this section,?\s+we",
+        r"now let'?s move on to",
+        r"as mentioned earlier",
+        r"as we discussed above",
+        r"we'?ve covered .+,?\s*now let",
+    ]
+    found_meta = []
+    for pattern in meta_patterns:
+        matches = re.findall(pattern, content_lower)
+        if matches:
+            found_meta.extend(matches)
+    if found_meta:
+        examples = found_meta[:3]
+        details = ", ".join(f"'{m.strip()}'" for m in examples)
+        suffix = f" (+{len(found_meta) - 3} more)" if len(found_meta) > 3 else ""
+        issues.append({
+            "level": "warning",
+            "check": "ai_tell_meta_commentary",
+            "message": f"Meta-commentary about article structure: {details}{suffix}",
+        })
+
+    # --- Counting before listing ---
+    count_before_list = re.findall(
+        r"\b(?:two|three|four|five|six|seven|eight|nine|ten|\d+)\s+"
+        r"(?:things?|factors?|reasons?|ways?|forces?|differences?|points?|aspects?)"
+        r"\s+(?:matter|drive|to consider|to keep|to know|stand out|are|that)\b",
+        content_lower,
+    )
+    if count_before_list:
+        details = ", ".join(f"'{m}'" for m in count_before_list[:3])
+        issues.append({
+            "level": "warning",
+            "check": "ai_tell_counting_before_listing",
+            "message": f"Counting before listing (just list them): {details}",
+        })
+
+    # --- Gratuitous competitor compliments ---
+    compliment_patterns = [
+        r"\b\w+\s+is\s+an?\s+(?:impressive|remarkable|fantastic|excellent|solid|great)\s+"
+        r"(?:project|platform|tool|product|service|option|choice)",
+        r"\bwe\s+have\s+(?:great\s+)?respect\s+for\b",
+        r"\bhave\s+done\s+(?:remarkable|impressive|great)\s+work\b",
+    ]
+    found_compliments = []
+    for pattern in compliment_patterns:
+        for m in re.finditer(pattern, content_lower):
+            found_compliments.append(m.group())
+    if found_compliments:
+        details = ", ".join(f"'{c}'" for c in found_compliments[:3])
+        issues.append({
+            "level": "warning",
+            "check": "ai_tell_gratuitous_compliments",
+            "message": f"Gratuitous competitor compliments (state facts plainly): {details}",
+        })
+
+    # --- Balanced diplomatic hedging ---
+    hedge_phrases = [
+        "neither is universally better",
+        "none of these are deal-breakers",
+        "none of these are deal breakers",
+        "it depends on your specific needs",
+        "both have their pros and cons",
+        "the best choice depends on your requirements",
+        "there's no one-size-fits-all",
+        "each has its own strengths",
+        "your mileage may vary",
+    ]
+    found_hedges = [p for p in hedge_phrases if p in content_lower]
+    if len(found_hedges) >= 2:
+        details = ", ".join(f"'{h}'" for h in found_hedges)
+        issues.append({
+            "level": "warning",
+            "check": "ai_tell_diplomatic_hedging",
+            "message": (
+                f"Multiple diplomatic hedges ({len(found_hedges)}x) — "
+                f"make a specific recommendation: {details}"
+            ),
+        })
+
+    # --- Excessive date stamps ---
+    date_stamp_pattern = r"\(as of \w+ \d{4}\)"
+    date_stamps = re.findall(date_stamp_pattern, content, re.IGNORECASE)
+    if len(date_stamps) > 6:
+        issues.append({
+            "level": "warning",
+            "check": "ai_tell_excessive_date_stamps",
+            "message": (
+                f"{len(date_stamps)} date stamps found — consolidate into a single "
+                f"'Data last verified: [date]' note, keep inline only on key claims"
+            ),
+        })
+
+    # --- Tricolons (three parallel short sentences) ---
+    sentences = re.split(r"(?<=[.!?])\s+", content)
+    # Filter out single-word fragments, headings, and lines with markdown syntax
+    sentences = [
+        s for s in sentences
+        if len(s.split()) >= 2
+        and not s.startswith("#")
+        and not s.startswith("[")
+        and not s.startswith("|")
+    ]
+    tricolon_count = 0
+    for i in range(len(sentences) - 2):
+        s1, s2, s3 = sentences[i], sentences[i + 1], sentences[i + 2]
+        w1, w2, w3 = len(s1.split()), len(s2.split()), len(s3.split())
+        # All three are short (<=10 words) and similar length (within 3 words)
+        if (
+            w1 <= 10
+            and w2 <= 10
+            and w3 <= 10
+            and abs(w1 - w2) <= 3
+            and abs(w2 - w3) <= 3
+            and abs(w1 - w3) <= 3
+        ):
+            # Check structural similarity: same ending word or same starting word
+            endings = [
+                re.sub(r"[.!?,;:]+$", "", s).split()[-1].lower()
+                for s in (s1, s2, s3) if s.split()
+            ]
+            starts = [s.split()[0].lower() for s in (s1, s2, s3) if s.split()]
+            if (
+                len(endings) == 3
+                and len(starts) == 3
+                and (len(set(endings)) == 1 or len(set(starts)) == 1)
+            ):
+                tricolon_count += 1
+    if tricolon_count > 0:
+        issues.append({
+            "level": "warning",
+            "check": "ai_tell_tricolons",
+            "message": (
+                f"{tricolon_count} tricolon(s) detected — three parallel short sentences "
+                f"with identical structure. Vary sentence length."
+            ),
+        })
 
 
 @validate_app.command(name="legal")
