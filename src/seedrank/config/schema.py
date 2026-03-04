@@ -248,6 +248,26 @@ class LegalConfig(BaseModel):
     disclaimer_templates: list[DisclaimerTemplate] = Field(
         default_factory=_default_disclaimer_templates,
     )
+    eu_checks_enabled: bool = Field(
+        default=False,
+        description="Enable EU/German unfair competition law checks by default",
+    )
+    trademark_max_mentions: int = Field(
+        default=15,
+        description="Threshold for flagging excessive competitor name mentions",
+    )
+    implied_deficiency_check: bool = Field(
+        default=True,
+        description="Check for implied deficiency patterns near competitor names",
+    )
+    require_comparison_methodology: bool = Field(
+        default=True,
+        description="Require methodology disclosure in comparison articles",
+    )
+    additional_disparaging_words: list[str] = Field(
+        default_factory=list,
+        description="Additional words to flag as disparaging near competitor names",
+    )
 
 
 class DataForSeoConfig(BaseModel):

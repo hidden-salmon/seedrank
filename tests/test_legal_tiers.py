@@ -1,10 +1,10 @@
-"""Tests for legal tier validation patterns (_check_legal_tiers)."""
+"""Tests for legal tier validation patterns (migrated to legal_checks module)."""
 
 from __future__ import annotations
 
 import pytest
 
-from seedrank.cli.validate import _check_legal_tiers
+from seedrank.cli.legal_checks import run_legal_checks
 from seedrank.config.schema import Competitor, ProductConfig, PseoConfig
 
 
@@ -28,10 +28,9 @@ def cfg() -> PseoConfig:
 
 
 def _run_check(content: str, cfg: PseoConfig) -> list[dict]:
-    """Helper to run _check_legal_tiers and return the issues list."""
-    issues: list[dict] = []
-    _check_legal_tiers(content, content.lower(), cfg, issues)
-    return issues
+    """Helper to run legal checks and return the issues list."""
+    report = run_legal_checks(content, cfg)
+    return report.to_issues_list()
 
 
 def _issues_with_check(issues: list[dict], check_name: str) -> list[dict]:
