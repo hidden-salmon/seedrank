@@ -170,7 +170,7 @@ def validate_article(
         # Run legal tier checks via new module
         from seedrank.cli.legal_checks import run_legal_checks
 
-        use_eu = eu_checks or getattr(cfg.legal, "eu_checks_enabled", False)
+        use_eu = eu_checks or cfg.legal.eu_checks_enabled
         report = run_legal_checks(content, cfg, eu_checks=use_eu)
         issues.extend(report.to_issues_list())
 
@@ -195,7 +195,7 @@ def validate_article(
         if report:
             result["legal_report"] = {
                 "overall_risk": report.overall_risk.value,
-                "checklist_score": report.checklist_score,
+                "checklist_score": report.checklist_score,  # None when no competitors
                 "checklist_total": report.checklist_total,
                 "checklist_failures": report.checklist_failures,
                 "findings": [
@@ -414,55 +414,6 @@ def _check_legal(
                 ),
             })
 
-    # Check for source URLs on competitor claims
-    if comp_rules.require_source_urls:
-        # Look for pricing/feature claims without nearby links
-        claim_patterns = [
-            r"(?:costs?|pric(?:e|ing)|starts? at|per month|\$/mo)",
-            r"(?:doesn't|does not|lacks?|missing|no support for)",
-            r"(?:only|just|limited to|max(?:imum)?)\s+\d+",
-        ]
-        for pattern in claim_patterns:
-            claim_matches = list(re.finditer(pattern, content_lower))
-            for match in claim_matches:
-                # Check if there's a link within 200 chars of the claim
-                start = max(0, match.start() - 50)
-                end = min(len(content), match.end() + 200)
-                context = content[start:end]
-                has_link = bool(re.search(r"\[.*?\]\(https?://", context))
-                has_footnote = bool(re.search(r"\[\d+\]", context))
-                if not has_link and not has_footnote:
-                    claim_text = content[match.start() : match.end() + 30].strip()
-                    if len(claim_text) > 60:
-                        claim_text = claim_text[:57] + "..."
-                    issues.append({
-                        "level": "warning",
-                        "check": "unsourced_claim",
-                        "message": (
-                            f"Possible unsourced competitor claim near: '...{claim_text}...'"
-                        ),
-                    })
-                    break  # One warning per pattern is enough
-
-    # Check for last-verified date
-    if comp_rules.require_last_verified:
-        has_verified = bool(
-            re.search(
-                r"(?:last (?:verified|updated|checked|reviewed))[:\s]*"
-                r"(?:\w+ \d{1,2},? \d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})",
-                content_lower,
-            )
-        )
-        if not has_verified:
-            issues.append({
-                "level": "warning",
-                "check": "last_verified",
-                "message": (
-                    "Comparison article without 'last verified' date. "
-                    "Add a date so readers know data freshness."
-                ),
-            })
-
     # Check for banned competitor claims
     for claim in comp_rules.banned_claims:
         if claim.lower() in content_lower:
@@ -506,10 +457,15 @@ def _render_legal_report(report: "LegalReport") -> None:
     red_count = sum(1 for f in report.findings if f.level == RiskLevel.RED)
     yellow_count = sum(1 for f in report.findings if f.level == RiskLevel.YELLOW)
 
+    checklist_str = (
+        f"{report.checklist_score}/{report.checklist_total}"
+        if report.checklist_score is not None
+        else "N/A (no competitors)"
+    )
     summary = (
         f"[bold {color}]Overall Risk: {risk_label[risk]}[/]\n"
         f"Findings: {red_count} high, {yellow_count} medium\n"
-        f"Checklist: {report.checklist_score}/{report.checklist_total}"
+        f"Checklist: {checklist_str}"
     )
     console.print(Panel(summary, title="Legal Compliance Report", border_style=color))
 
@@ -536,8 +492,8 @@ def _render_legal_report(report: "LegalReport") -> None:
         console.print("\n[bold]Checklist failures:[/]")
         for item in report.checklist_failures:
             console.print(f"  [red]✗[/] {item}")
-    elif report.checklist_score == 12:
-        console.print("\n[green]All 12 checklist items passed.[/]")
+    elif report.checklist_score is not None and report.checklist_score == report.checklist_total:
+        console.print(f"\n[green]All {report.checklist_total} checklist items passed.[/]")
 
 
 def _check_citability(content: str, content_lower: str, issues: list[dict]) -> None:
@@ -630,6 +586,13 @@ def _check_citability(content: str, content_lower: str, issues: list[dict]) -> N
 def _check_ai_tells(content: str, content_lower: str, issues: list[dict]) -> None:
     """Detect AI writing tells — patterns that make content read as machine-generated."""
 
+    # Strip YAML frontmatter so it doesn't trigger false positives
+    if content.startswith("---"):
+        end = content.find("---", 3)
+        if end > 0:
+            content = content[end + 3:].lstrip("\r\n")
+            content_lower = content.lower()
+
     # --- AI crutch phrases ---
     crutch_phrases = [
         "here's what you need to know",
@@ -653,7 +616,7 @@ def _check_ai_tells(content: str, content_lower: str, issues: list[dict]) -> Non
     ]
     found_crutches = []
     for phrase in crutch_phrases:
-        count = content_lower.count(phrase)
+        count = len(re.findall(r"\b" + re.escape(phrase) + r"\b", content_lower))
         if count > 0:
             found_crutches.append((phrase, count))
     if found_crutches:
@@ -672,11 +635,15 @@ def _check_ai_tells(content: str, content_lower: str, issues: list[dict]) -> Non
         "the honest answer",
         "we honestly",
         "to be frank",
+        "frankly",
         "the truth is",
         "in all honesty",
         "let me be real",
     ]
-    found_honesty = [p for p in honesty_phrases if p in content_lower]
+    found_honesty = [
+        p for p in honesty_phrases
+        if re.search(r"\b" + re.escape(p) + r"\b", content_lower)
+    ]
     if found_honesty:
         details = ", ".join(f"'{p}'" for p in found_honesty)
         issues.append({
@@ -717,7 +684,8 @@ def _check_ai_tells(content: str, content_lower: str, issues: list[dict]) -> Non
     count_before_list = re.findall(
         r"\b(?:two|three|four|five|six|seven|eight|nine|ten|\d+)\s+"
         r"(?:things?|factors?|reasons?|ways?|forces?|differences?|points?|aspects?)"
-        r"\s+(?:matter|drive|to consider|to keep|to know|stand out|are|that)\b",
+        r"\s+(?:matter|drive|to consider|to keep|to know|stand out|are|that"
+        r"|why|between|you should|make|set|help)\b",
         content_lower,
     )
     if count_before_list:
@@ -730,7 +698,7 @@ def _check_ai_tells(content: str, content_lower: str, issues: list[dict]) -> Non
 
     # --- Gratuitous competitor compliments ---
     compliment_patterns = [
-        r"\b\w+\s+is\s+an?\s+(?:impressive|remarkable|fantastic|excellent|solid|great)\s+"
+        r"\b\w+(?:\s+\w+){0,2}\s+is\s+an?\s+(?:impressive|remarkable|fantastic|excellent|solid|great)\s+"
         r"(?:project|platform|tool|product|service|option|choice)",
         r"\bwe\s+have\s+(?:great\s+)?respect\s+for\b",
         r"\bhave\s+done\s+(?:remarkable|impressive|great)\s+work\b",
@@ -923,7 +891,7 @@ def validate_legal(
 
         comparison_articles = _find_comparison_articles(conn, cfg, workspace)
         article_reports: list[tuple[str, "LegalReport"]] = []
-        use_eu = eu_checks or getattr(cfg.legal, "eu_checks_enabled", False)
+        use_eu = eu_checks or cfg.legal.eu_checks_enabled
 
         if comparison_articles:
             info(f"Found {len(comparison_articles)} comparison article(s) to audit")

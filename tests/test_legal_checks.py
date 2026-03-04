@@ -102,7 +102,7 @@ class TestLegalReport:
 
     def test_empty_report(self) -> None:
         report = LegalReport()
-        assert report.checklist_score == 0
+        assert report.checklist_score is None
         assert report.checklist_total == 12
         assert report.to_issues_list() == []
 
@@ -255,7 +255,7 @@ class TestOutdatedClaims:
         assert len(findings) == 0
 
     def test_lacks_feature(self) -> None:
-        content = "rivalapp lacks dark mode support"
+        content = "rivalapp lacks support for dark mode"
         findings = check_outdated_claims(content, ["rivalapp"])
         assert len(findings) >= 1
 
@@ -275,7 +275,7 @@ class TestOutdatedClaims:
         assert len(findings) >= 1
 
     def test_missing_detected(self) -> None:
-        content = "rivalapp is missing key integration features"
+        content = "rivalapp is missing key integration with third-party tools"
         findings = check_outdated_claims(content, ["rivalapp"])
         assert len(findings) >= 1
 
@@ -292,7 +292,7 @@ class TestCherryPickedComparison:
         rows = "\n".join(f"| Feature {i} | ✅ | ❌ |" for i in range(10))
         content = f"{header}\n{sep}\n{rows}"
         findings = check_cherry_picked_comparison(content)
-        assert any(f.check == "legal_yellow_cherry_picked" for f in findings)
+        assert any(f.check in ("legal_yellow_cherry_picked_onesided", "legal_yellow_cherry_picked_toomany") for f in findings)
 
     def test_balanced_table_passes(self) -> None:
         content = (
@@ -317,7 +317,7 @@ class TestCherryPickedComparison:
             "| Docs | ✅ | ❌ |\n"
         )
         findings = check_cherry_picked_comparison(content)
-        assert any(f.check == "legal_yellow_cherry_picked" for f in findings)
+        assert any(f.check in ("legal_yellow_cherry_picked_onesided", "legal_yellow_cherry_picked_toomany") for f in findings)
 
     def test_no_table_clean(self) -> None:
         content = "Just a regular article without tables."
@@ -518,12 +518,13 @@ class TestChecklistScorer:
         assert score == 12
         assert len(failed) == 0
 
-    def test_zero_score(self) -> None:
+    def test_low_score(self) -> None:
         findings = [
             LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_outdated_claim", message="m"),
             LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_undated_pricing", message="m"),
             LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_opinion_as_fact", message="m"),
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_cherry_picked", message="m"),
+            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_cherry_picked_onesided", message="m"),
+            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_cherry_picked_toomany", message="m"),
             LegalFinding(level=RiskLevel.RED, check="legal_red_trademark_misuse", message="m",
                          statement="rivalapp-like"),
             LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_implied_deficiency", message="m"),
@@ -531,8 +532,8 @@ class TestChecklistScorer:
             LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_unscoped_best", message="m"),
         ]
         score, failed = compute_checklist_score(findings, "no dates here")
-        assert score < 5
-        assert len(failed) > 5
+        assert score <= 3
+        assert len(failed) >= 9
 
     def test_partial_score(self) -> None:
         findings = [
@@ -567,7 +568,8 @@ class TestRunLegalChecks:
         )
         report = run_legal_checks(content, cfg)
         assert report.overall_risk == RiskLevel.GREEN
-        # Should still have checklist items (like missing "last verified")
+        # No competitors mentioned, so checklist is not scored
+        assert report.checklist_score is None
         assert report.checklist_total == 12
 
     def test_problematic_content(self, cfg: PseoConfig) -> None:
@@ -605,10 +607,11 @@ class TestRunLegalChecks:
         assert all("level" in i and "check" in i and "message" in i for i in issues)
 
     def test_report_has_checklist(self, cfg: PseoConfig) -> None:
-        content = "Some clean content."
+        content = "RivalApp is a product we compare against. Some clean content."
         report = run_legal_checks(content, cfg)
         assert report.checklist_total == 12
         assert isinstance(report.checklist_failures, list)
+        assert report.checklist_score is not None
         assert 0 <= report.checklist_score <= 12
 
     def test_config_trademark_max_mentions(self) -> None:

@@ -52,13 +52,33 @@ class LegalFinding:
         }
 
 
+# ---------------------------------------------------------------------------
+# 12-item Safe Comparative Advertising Checklist
+# ---------------------------------------------------------------------------
+
+_CHECKLIST_ITEMS = [
+    "All factual claims about competitors are verifiable and currently accurate",
+    "Pricing comparisons specify plan tier, billing period, and date verified",
+    "Feature comparisons note the date of assessment",
+    "Opinions are clearly framed as opinions",
+    "The comparison includes areas where the competitor genuinely excels",
+    "No competitor trademarks used beyond nominative fair use",
+    "No implication of competitor dishonesty, incompetence, or harm",
+    "No claims that the competitor's product is an imitation or inferior copy",
+    "Comparison criteria are representative and material (not cherry-picked)",
+    "Sourced claims link to or reference the source",
+    "Content has a 'last verified' or 'last updated' date",
+    "No superlatives presented as factual without evidence",
+]
+
+
 @dataclass
 class LegalReport:
     """Aggregated legal compliance report."""
 
     findings: list[LegalFinding] = field(default_factory=list)
-    checklist_score: int = 0
-    checklist_total: int = 12
+    checklist_score: int | None = None
+    checklist_total: int = field(default_factory=lambda: len(_CHECKLIST_ITEMS))
     checklist_failures: list[str] = field(default_factory=list)
 
     @property
@@ -125,7 +145,7 @@ def check_disparaging_words(
 ) -> list[LegalFinding]:
     """RED: Disparaging words within 100 chars of a competitor name."""
     disparaging = [
-        "limited", "basic", "outdated", "opaque", "stagnated",
+        "outdated", "opaque", "stagnated",
         "went downhill", "can't match", "clunky", "disappointing",
     ]
     if extra_words:
@@ -197,7 +217,9 @@ def check_unattributed_stats(content: str, content_lower: str) -> list[LegalFind
         start = max(0, m.start() - 80)
         end = min(len(content_lower), m.end() + 80)
         context = content_lower[start:end]
-        attributed = any(w in context for w in ["per", "according to", "reports", "source:"])
+        attributed = any(w in context for w in ["according to", "reports", "source:"]) or bool(
+            re.search(r"\bper\b", context)
+        )
         has_link = bool(re.search(r"\[.*?\]\(https?://", content[start:end]))
         if not attributed and not has_link:
             findings.append(LegalFinding(
@@ -288,20 +310,15 @@ def check_trademark_misuse(
 
         # "better X" (standalone, not "better than X")
         pattern = rf"\bbetter\s+{re.escape(name_lower)}\b"
-        for m in re.finditer(pattern, content_lower):
-            # Exclude "better than X"
-            pre_start = max(0, m.start() - 5)
-            pre = content_lower[pre_start:m.start()]
-            if "than" not in pre:
-                findings.append(LegalFinding(
-                    level=RiskLevel.RED,
-                    check="legal_red_trademark_misuse",
-                    message=f"RED: Trademark misuse — 'better {name}' implies replacement",
-                    framework=LegalFramework.LANHAM_ACT,
-                    statement=f"better {name}",
-                    recommended_fix=f"Use 'alternative to {name}' instead.",
-                ))
-                break
+        if re.search(pattern, content_lower):
+            findings.append(LegalFinding(
+                level=RiskLevel.RED,
+                check="legal_red_trademark_misuse",
+                message=f"RED: Trademark misuse — 'better {name}' implies replacement",
+                framework=LegalFramework.LANHAM_ACT,
+                statement=f"better {name}",
+                recommended_fix=f"Use 'alternative to {name}' instead.",
+            ))
 
         # Excessive mentions
         count = len(re.findall(re.escape(name_lower), content_lower))
@@ -398,8 +415,8 @@ def check_outdated_claims(
         r"does\s+not\s+support",
         r"doesn't\s+offer",
         r"does\s+not\s+offer",
-        r"lacks?\s+\w+",
-        r"missing\s+\w+",
+        r"\blacks?\s+(?:support|integration|feature|api|capability|functionality|option)\w*",
+        r"\bmissing\s+(?:key|critical|important|basic|native|built-in|proper)\s+\w+",
         r"doesn't\s+have",
         r"does\s+not\s+have",
         r"doesn't\s+include",
@@ -429,24 +446,24 @@ def check_outdated_claims(
 
 
 def check_cherry_picked_comparison(content: str) -> list[LegalFinding]:
-    """YELLOW: Markdown tables where own product wins >80% and competitor <30%, or >8 rows."""
+    """YELLOW: Markdown tables where a competitor column has >70% negative marks, or >8 rows."""
     findings: list[LegalFinding] = []
 
     # Find markdown tables
     table_pattern = re.compile(
-        r"^(\|.+\|)\n(\|[-:\s|]+\|)\n((?:\|.+\|\n?)+)",
+        r"^(\|.+\|)\r?\n(\|[-:\s|]+\|)\r?\n((?:\|.+\|\r?\n?)+)",
         re.MULTILINE,
     )
 
     for table_match in table_pattern.finditer(content):
         header = table_match.group(1)
         body = table_match.group(3)
-        rows = [r.strip() for r in body.strip().split("\n") if r.strip()]
+        rows = [r.strip() for r in body.strip().splitlines() if r.strip()]
 
         if len(rows) > 8:
             findings.append(LegalFinding(
                 level=RiskLevel.YELLOW,
-                check="legal_yellow_cherry_picked",
+                check="legal_yellow_cherry_picked_toomany",
                 message=f"YELLOW: Comparison table has {len(rows)} rows — may appear cherry-picked",
                 framework=LegalFramework.EU_DIRECTIVE,
                 statement=f"Table with {len(rows)} rows",
@@ -484,7 +501,7 @@ def check_cherry_picked_comparison(content: str) -> list[LegalFinding]:
                     # This column is mostly negative — flag if another column is mostly positive
                     findings.append(LegalFinding(
                         level=RiskLevel.YELLOW,
-                        check="legal_yellow_cherry_picked",
+                        check="legal_yellow_cherry_picked_onesided",
                         message=(
                             f"YELLOW: Comparison table may be cherry-picked — "
                             f"column '{cols[col_idx]}' has {neg_count}/{total} negative marks"
@@ -647,23 +664,8 @@ def check_screenshot_fair_use(
 
 
 # ===========================================================================
-# Checklist scorer — 12-item Safe Comparative Advertising Checklist
+# Checklist scorer
 # ===========================================================================
-
-_CHECKLIST_ITEMS = [
-    "All factual claims about competitors are verifiable and currently accurate",
-    "Pricing comparisons specify plan tier, billing period, and date verified",
-    "Feature comparisons note the date of assessment",
-    "Opinions are clearly framed as opinions",
-    "The comparison includes areas where the competitor genuinely excels",
-    "No competitor trademarks used beyond nominative fair use",
-    "No implication of competitor dishonesty, incompetence, or harm",
-    "No claims that the competitor's product is an imitation or inferior copy",
-    "Comparison criteria are representative and material (not cherry-picked)",
-    "Sourced claims link to or reference the source",
-    "Content has a 'last verified' or 'last updated' date",
-    "No superlatives presented as factual without evidence",
-]
 
 
 def compute_checklist_score(findings: list[LegalFinding], content_lower: str) -> tuple[int, list[str]]:
@@ -691,8 +693,8 @@ def compute_checklist_score(findings: list[LegalFinding], content_lower: str) ->
     if "legal_yellow_opinion_as_fact" in checks:
         failed.append(_CHECKLIST_ITEMS[3])
 
-    # Item 5: Balanced comparison — fails if cherry-picked
-    if "legal_yellow_cherry_picked" in checks:
+    # Item 5: Balanced comparison — fails if one-sided cherry-picked
+    if "legal_yellow_cherry_picked_onesided" in checks:
         failed.append(_CHECKLIST_ITEMS[4])
 
     # Item 6: Trademark fair use — fails if trademark misuse found
@@ -711,10 +713,9 @@ def compute_checklist_score(findings: list[LegalFinding], content_lower: str) ->
                 failed.append(_CHECKLIST_ITEMS[7])
                 break
 
-    # Item 9: Representative criteria — fails if cherry-picked
-    if "legal_yellow_cherry_picked" in checks:
-        if _CHECKLIST_ITEMS[8] not in failed:
-            failed.append(_CHECKLIST_ITEMS[8])
+    # Item 9: Representative criteria — fails if too many rows
+    if "legal_yellow_cherry_picked_toomany" in checks:
+        failed.append(_CHECKLIST_ITEMS[8])
 
     # Item 10: Sourced claims
     if "legal_yellow_unattributed_stat" in checks:
@@ -733,7 +734,7 @@ def compute_checklist_score(findings: list[LegalFinding], content_lower: str) ->
     if "legal_yellow_unscoped_best" in checks or "legal_red_multiplier" in checks:
         failed.append(_CHECKLIST_ITEMS[11])
 
-    score = 12 - len(failed)
+    score = len(_CHECKLIST_ITEMS) - len(failed)
     return score, failed
 
 
@@ -747,51 +748,59 @@ def run_legal_checks(
     cfg: PseoConfig,
     eu_checks: bool = False,
 ) -> LegalReport:
-    """Run all legal checks and return a LegalReport."""
+    """Run all legal checks and return a LegalReport.
+
+    Checks are split into universal (always run) and competitor-context
+    (only when competitor names are found in the content).
+    """
     content_lower = content.lower()
     names, names_lower = _competitor_names(cfg)
 
-    extra_disparaging = getattr(cfg.legal, "additional_disparaging_words", [])
-    max_mentions = getattr(cfg.legal, "trademark_max_mentions", 15)
+    extra_disparaging = cfg.legal.additional_disparaging_words
+    max_mentions = cfg.legal.trademark_max_mentions
 
     findings: list[LegalFinding] = []
 
-    # Migrated checks
+    # --- Universal checks (always run) ---
     findings.extend(check_multiplier_claims(content_lower))
-    findings.extend(check_disparaging_words(content_lower, names_lower, extra_disparaging or None))
     findings.extend(check_exclusivity_claims(content_lower))
-    findings.extend(check_performance_claims(content_lower))
-    findings.extend(check_unattributed_stats(content, content_lower))
     findings.extend(check_unscoped_best(content_lower))
     findings.extend(check_undated_pricing(content, content_lower))
+    findings.extend(check_unattributed_stats(content, content_lower))
 
-    # New checks
-    findings.extend(check_trademark_misuse(content, content_lower, names, names_lower, max_mentions))
+    # --- Competitor-context checks (only when competitors are mentioned) ---
+    has_competitors = any(n in content_lower for n in names_lower)
 
-    if getattr(cfg.legal, "implied_deficiency_check", True):
-        findings.extend(check_implied_deficiency(content_lower, names_lower))
+    if has_competitors:
+        findings.extend(check_disparaging_words(content_lower, names_lower, extra_disparaging))
+        findings.extend(check_performance_claims(content_lower))
+        findings.extend(check_trademark_misuse(content, content_lower, names, names_lower, max_mentions))
 
-    findings.extend(check_opinion_as_fact(content_lower, names_lower))
-    findings.extend(check_outdated_claims(content_lower, names_lower))
-    findings.extend(check_cherry_picked_comparison(content))
-    findings.extend(check_pricing_specificity(content, content_lower, names_lower))
+        if cfg.legal.implied_deficiency_check:
+            findings.extend(check_implied_deficiency(content_lower, names_lower))
 
-    if getattr(cfg.legal, "require_comparison_methodology", True):
-        findings.extend(check_missing_methodology(content, content_lower))
+        findings.extend(check_opinion_as_fact(content_lower, names_lower))
+        findings.extend(check_outdated_claims(content_lower, names_lower))
+        findings.extend(check_cherry_picked_comparison(content))
+        findings.extend(check_pricing_specificity(content, content_lower, names_lower))
 
-    findings.extend(check_trademark_in_headings(content, names_lower))
-    findings.extend(check_screenshot_fair_use(content, content_lower, names_lower))
+        if cfg.legal.require_comparison_methodology:
+            findings.extend(check_missing_methodology(content, content_lower))
 
-    # EU-specific checks
-    if eu_checks:
-        findings.extend(check_eu_denigration(content_lower, names_lower))
+        findings.extend(check_trademark_in_headings(content, names_lower))
+        findings.extend(check_screenshot_fair_use(content, content_lower, names_lower))
 
-    # Checklist
-    score, failed = compute_checklist_score(findings, content_lower)
+        # EU-specific checks
+        if eu_checks:
+            findings.extend(check_eu_denigration(content_lower, names_lower))
 
-    return LegalReport(
-        findings=findings,
-        checklist_score=score,
-        checklist_total=12,
-        checklist_failures=failed,
-    )
+        # Checklist scoring only when competitors present
+        score, failed = compute_checklist_score(findings, content_lower)
+        return LegalReport(
+            findings=findings,
+            checklist_score=score,
+            checklist_total=len(_CHECKLIST_ITEMS),
+            checklist_failures=failed,
+        )
+
+    return LegalReport(findings=findings)

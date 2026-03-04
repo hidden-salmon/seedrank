@@ -106,10 +106,12 @@ class TestValidateArticleLegal:
         )
         result = runner.invoke(
             app,
-            ["validate", "article", str(article), "-c", str(ws / "seedrank.config.yaml")],
+            ["validate", "article", str(article), "-c", str(ws / "seedrank.config.yaml"),
+             "--json"],
         )
         assert result.exit_code == 0
-        assert "last_verified" in result.output
+        # last_verified is now caught by legal_checks checklist item 11
+        assert "last verified" in result.output or "last updated" in result.output
 
     def test_comparison_with_disclaimer_and_date_passes(self, tmp_path: Path) -> None:
         ws = _make_workspace_with_config(tmp_path)

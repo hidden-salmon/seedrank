@@ -258,8 +258,11 @@ class TestIntegrationWithCLI:
         )
         assert result.exit_code == 0
         output = result.output
-        json_start = output.index("{")
-        json_end = output.rindex("}") + 1
+        try:
+            json_start = output.index("{")
+            json_end = output.rindex("}") + 1
+        except ValueError:
+            raise AssertionError(f"No JSON object found in output:\n{output}")
         data = json.loads(output[json_start:json_end])
 
         ai_tell_checks = {
@@ -302,8 +305,11 @@ class TestIntegrationWithCLI:
         )
         assert result.exit_code == 0
         output = result.output
-        json_start = output.index("{")
-        json_end = output.rindex("}") + 1
+        try:
+            json_start = output.index("{")
+            json_end = output.rindex("}") + 1
+        except ValueError:
+            raise AssertionError(f"No JSON object found in output:\n{output}")
         data = json.loads(output[json_start:json_end])
 
         ai_tell_checks = [

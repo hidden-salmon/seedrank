@@ -1,13 +1,13 @@
 ---
 name: review-article
-description: 9-dimension audit of an article — question coverage, fact-check, product accuracy, legal tiers, citability, cross-linking, structure, cross-batch consistency, and developer sniff test. Use when you need to review an article before publishing.
+description: 10-dimension audit of an article — question coverage, fact-check, product accuracy, legal tiers, citability, cross-linking, structure, cross-batch consistency, developer sniff test, and AI-tell detection. Use when you need to review an article before publishing.
 argument-hint: <path-to-article>
 allowed-tools: Bash, Read, Grep, Glob, Edit
 ---
 
-# Review Article — 9-Dimension Audit
+# Review Article — 10-Dimension Audit
 
-Perform a comprehensive 9-dimension review of: **$ARGUMENTS**
+Perform a comprehensive 10-dimension review of: **$ARGUMENTS**
 
 A page can pass every technical check and still be bad content. This audit catches both.
 
@@ -21,7 +21,7 @@ Parse the JSON output. Separate issues by type: legal RED/YELLOW tiers, citabili
 
 ## Step 2: Read the article
 
-Read the full article content. Then evaluate all 9 dimensions:
+Read the full article content. Then evaluate all 10 dimensions:
 
 ## Dimension 1: Question Coverage
 

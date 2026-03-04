@@ -71,18 +71,18 @@ class TestRedMultiplierClaims:
 # ---------------------------------------------------------------------------
 class TestRedDisparaging:
     def test_disparaging_near_competitor_flagged(self, cfg: PseoConfig) -> None:
-        content = "RivalApp has a limited feature set compared to us."
+        content = "RivalApp has an outdated feature set compared to us."
         issues = _run_check(content, cfg)
         matched = _issues_with_check(issues, "legal_red_disparaging")
         assert len(matched) >= 1
         assert matched[0]["level"] == "error"
-        assert "limited" in matched[0]["message"]
+        assert "outdated" in matched[0]["message"]
 
     def test_disparaging_far_from_competitor_not_flagged(self, cfg: PseoConfig) -> None:
         # Place the disparaging word very far from the competitor name
         # (> 100 chars away in both directions)
         filler = "x " * 80  # 160 chars of filler
-        content = f"RivalApp is a great product. {filler}The old system was limited."
+        content = f"RivalApp is a great product. {filler}The old system was outdated."
         issues = _run_check(content, cfg)
         matched = _issues_with_check(issues, "legal_red_disparaging")
         assert len(matched) == 0
@@ -136,26 +136,26 @@ class TestRedExclusivity:
 # ---------------------------------------------------------------------------
 class TestRedPerformance:
     def test_faster_than_without_benchmark_flagged(self, cfg: PseoConfig) -> None:
-        content = "Our engine is faster than any competitor on the market."
+        content = "Our engine is faster than RivalApp on the market."
         issues = _run_check(content, cfg)
         matched = _issues_with_check(issues, "legal_red_performance")
         assert len(matched) >= 1
         assert matched[0]["level"] == "error"
 
     def test_faster_than_with_benchmark_passes(self, cfg: PseoConfig) -> None:
-        content = "Our engine is faster than competitors, averaging 120ms in benchmark tests."
+        content = "Our engine is faster than RivalApp, averaging 120ms in benchmark tests."
         issues = _run_check(content, cfg)
         matched = _issues_with_check(issues, "legal_red_performance")
         assert len(matched) == 0
 
     def test_more_efficient_than_without_benchmark(self, cfg: PseoConfig) -> None:
-        content = "Our solution is more efficient than the old approach."
+        content = "Our solution is more efficient than RivalApp's approach."
         issues = _run_check(content, cfg)
         matched = _issues_with_check(issues, "legal_red_performance")
         assert len(matched) >= 1
 
     def test_slower_than_with_percentage(self, cfg: PseoConfig) -> None:
-        content = "The legacy system is 30% slower than our new version."
+        content = "RivalApp is 30% slower than our new version."
         issues = _run_check(content, cfg)
         matched = _issues_with_check(issues, "legal_red_performance")
         assert len(matched) == 0  # "%" is recognized as benchmark data
