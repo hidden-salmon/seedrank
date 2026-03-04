@@ -37,7 +37,7 @@ class TestInitCommand:
         workspace.mkdir()
         result = runner.invoke(app, ["init", "-o", str(workspace)])
         assert result.exit_code == 0
-        assert (workspace / "CLAUDE.md").exists()
+        assert (workspace / ".claude" / "seedrank.md").exists()
         assert (workspace / "data" / "seedrank.db").exists()
         assert (workspace / "pipeline" / "state.yaml").exists()
 
@@ -55,7 +55,7 @@ class TestInitCommand:
         workspace = tmp_path / "ws"
         workspace.mkdir()
         runner.invoke(app, ["init", "-o", str(workspace)])
-        content = (workspace / "CLAUDE.md").read_text()
+        content = (workspace / ".claude" / "seedrank.md").read_text()
         assert "Seedrank System" in content
         assert "seedrank research keywords" in content
         assert "Session Protocol" in content
@@ -71,7 +71,7 @@ class TestInitCommand:
 
         shutil.copy2(EXAMPLE_CONFIG, workspace / "seedrank.config.yaml")
         runner.invoke(app, ["init", "-o", str(workspace)])
-        content = (workspace / "CLAUDE.md").read_text()
+        content = (workspace / ".claude" / "seedrank.md").read_text()
         assert "Moonbeam" in content
 
     def test_init_state_yaml(self, tmp_path: Path) -> None:

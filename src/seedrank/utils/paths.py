@@ -38,6 +38,7 @@ def workspace_dirs(root: Path) -> dict[str, Path]:
         "research": root / "research",
         "briefs": root / "briefs",
         "content": root / "content",
+        "claude": root / ".claude",
     }
 
 

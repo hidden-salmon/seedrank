@@ -56,5 +56,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Database migrations system
 - Exponential backoff retry for API calls
 - 8 Claude Code skills: `/research-session`, `/write-article`, `/review-article`, `/audit-legal`, `/plan-calendar`, `/geo-optimize`, `/qa-ai-tells`, `/aeo-monitor`
-- Auto-generated CLAUDE.md with full command reference and API usage rules
+- Auto-generated `.claude/seedrank.md` with full command reference and API usage rules
 - Pydantic configuration with example config

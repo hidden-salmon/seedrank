@@ -63,7 +63,7 @@ line-length = 100
 select = ["E", "F", "I", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/seedrank/cli/init_cmd.py" = ["E501"]  # CLAUDE.md template contains long markdown lines
+"src/seedrank/cli/init_cmd.py" = ["E501"]  # seedrank.md template contains long markdown lines
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

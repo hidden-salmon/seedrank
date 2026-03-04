@@ -15,7 +15,7 @@ from seedrank.utils.paths import ensure_workspace_dirs
 
 
 def _generate_claude_md(cfg: PseoConfig | None) -> str:
-    """Generate CLAUDE.md content for the workspace.
+    """Generate .claude/seedrank.md content for the workspace.
 
     Pulls company-specific rules from config when available.
     Falls back to sensible generic defaults otherwise.
@@ -572,7 +572,8 @@ def init_cmd(
     """Create a new Seedrank workspace with database and directory structure."""
     workspace = output.resolve()
 
-    if (workspace / "CLAUDE.md").exists():
+    seedrank_md = workspace / ".claude" / "seedrank.md"
+    if seedrank_md.exists():
         result = (
             console.input(
                 "  [yellow]Workspace already exists.[/yellow] Overwrite? [y/N]: "
@@ -596,7 +597,7 @@ def init_cmd(
         migrate_db(conn)
     info(f"Database initialized: {db_path.relative_to(workspace)}")
 
-    # Generate CLAUDE.md — requires config for product name + rules
+    # Generate .claude/seedrank.md — requires config for product name + rules
     config_path = workspace / "seedrank.config.yaml"
     cfg = None
     if config_path.exists():
@@ -615,8 +616,36 @@ def init_cmd(
 
     claude_md = _generate_claude_md(cfg)
 
-    (workspace / "CLAUDE.md").write_text(claude_md, encoding="utf-8")
-    info("Generated CLAUDE.md")
+    seedrank_md.parent.mkdir(parents=True, exist_ok=True)
+    seedrank_md.write_text(claude_md, encoding="utf-8")
+    info("Generated .claude/seedrank.md")
+
+    # Create .env.example if it doesn't exist
+    env_example = workspace / ".env.example"
+    if not env_example.exists():
+        env_example.write_text(
+            "# DataForSEO — required for keyword research, SERP analysis, competitor commands\n"
+            "# Sign up at https://dataforseo.com\n"
+            "DATAFORSEO_LOGIN=\n"
+            "DATAFORSEO_PASSWORD=\n"
+            "\n"
+            "# AI model API keys — required for GEO (AI visibility) monitoring\n"
+            "# Only set the ones you plan to use\n"
+            "\n"
+            "# OpenAI (ChatGPT queries) — https://platform.openai.com\n"
+            "OPENAI_API_KEY=\n"
+            "\n"
+            "# Anthropic (Claude queries) — https://console.anthropic.com\n"
+            "ANTHROPIC_API_KEY=\n"
+            "\n"
+            "# Perplexity — https://docs.perplexity.ai\n"
+            "PERPLEXITY_API_KEY=\n"
+            "\n"
+            "# Google Gemini — https://ai.google.dev\n"
+            "GEMINI_API_KEY=\n",
+            encoding="utf-8",
+        )
+        info("Created .env.example")
 
     # Generate strategy file templates (if they don't already exist)
     _generate_strategy_templates(workspace)
@@ -638,8 +667,8 @@ def init_cmd(
         "    1. Create/edit [cyan]seedrank.config.yaml[/cyan] with your product details"
     )
     console.print(
-        "    2. Run [cyan]seedrank init[/cyan] again to regenerate CLAUDE.md"
-        " with your product name"
+        "    2. Run [cyan]seedrank init[/cyan] again to regenerate"
+        " .claude/seedrank.md with your product name"
     )
     console.print(
         '    3. Run [cyan]seedrank research keywords "your keywords"[/cyan]'

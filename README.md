@@ -11,7 +11,7 @@ A CLI toolkit for programmatic SEO. Researches keywords, manages content, tracks
 Seedrank is a set of commands that Claude Code calls to do the mechanical work of SEO: fetching keyword data, tracking articles, computing crosslinks, syncing Google Search Console metrics, and monitoring how AI models talk about your brand.
 
 ```
-Claude Code (reads CLAUDE.md, makes decisions)
+Claude Code (reads .claude/seedrank.md, makes decisions)
     |
     |-- seedrank research keywords "..."      --> DataForSEO API --> SQLite
     |-- seedrank research competitors ...     --> DataForSEO API --> SQLite
@@ -28,54 +28,67 @@ Claude Code is the brain. Seedrank is the hands.
 
 ## Install
 
-```bash
-git clone https://github.com/hidden-salmon/seedrank.git
-cd seedrank
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
-```
+Seedrank is a CLI tool that you install once and then use in any project directory. It works like `terraform` or `git` — the tool lives in your PATH, the workspace (database, config, content) lives in your project.
 
 Requires **Python 3.11+**.
+
+```bash
+pip install git+https://github.com/hidden-salmon/seedrank.git
+```
+
+This gives you the `seedrank` command globally. You can also use `pipx` to keep it isolated from your other Python packages:
+
+```bash
+pipx install git+https://github.com/hidden-salmon/seedrank.git
+```
+
+> **Note:** Seedrank is not on PyPI yet. Once published, install with `pip install seedrank`.
 
 ## Quick start
 
 ### 1. Create a workspace
 
+Navigate to your project directory (or create a new one) and initialize:
+
 ```bash
-mkdir my-project && cd my-project
+cd my-project
 seedrank init
 ```
 
-This creates the directory structure, initializes a SQLite database, and generates a `CLAUDE.md` that teaches Claude Code how to use every command.
+This creates the directory structure, initializes a SQLite database, and generates `.claude/seedrank.md` — instructions that teach Claude Code how to use every seedrank command. It writes to `.claude/` so it won't overwrite your project's own `CLAUDE.md`.
 
 ### 2. Add your config
 
-Create `seedrank.config.yaml` in the workspace root (see [Configuration](#configuration) below or copy `examples/seedrank.config.yaml`).
+Create `seedrank.config.yaml` in the workspace root (see [Configuration](#configuration) below or copy from the [example config](examples/seedrank.config.yaml)).
 
 ### 3. Set up API keys
+
+Create a `.env` file with your API keys (see [Environment variables](#environment-variables) below):
 
 ```bash
 cp .env.example .env
 # Edit .env with your API keys
 ```
 
-### 4. Re-initialize with your product name
+> The `.env.example` file is created by `seedrank init`.
+
+### 4. Re-initialize with your config
 
 ```bash
 seedrank init
 ```
 
-Running `init` again regenerates `CLAUDE.md` with your product name and domain from the config.
+Running `init` again regenerates `.claude/seedrank.md` with your product name, domain, voice rules, and legal settings from the config.
 
 ### 5. Start working
 
-Open Claude Code in the workspace directory:
+Open Claude Code in your project directory:
 
 ```bash
 claude
 ```
 
-Claude Code reads `CLAUDE.md` and knows how to use every `seedrank` command. A typical session:
+Claude Code reads `.claude/seedrank.md` and knows how to use every `seedrank` command. A typical session:
 
 ```
 > Start a new SEO research session for my product
@@ -107,7 +120,7 @@ DataForSEO credentials can also be set in `seedrank.config.yaml` under `datafors
 
 | Command | Description |
 |---|---|
-| `seedrank init` | Create workspace, initialize database, generate CLAUDE.md |
+| `seedrank init` | Create workspace, initialize database, generate `.claude/seedrank.md` |
 | `seedrank status` | Show workspace overview: config, database stats, pipeline state |
 | `seedrank session start` | Load context from the last session |
 | `seedrank session end "summary"` | Write session log and update state |
@@ -378,7 +391,8 @@ After `seedrank init`, the workspace looks like this:
 ```
 my-project/
 ├── seedrank.config.yaml          # Product config (single source of truth)
-├── CLAUDE.md                 # Auto-generated instructions for Claude Code
+├── .claude/
+│   └── seedrank.md           # Auto-generated instructions for Claude Code
 ├── .env                      # API keys (not committed)
 ├── data/
 │   ├── seedrank.db               # SQLite database
@@ -471,6 +485,8 @@ Skills are the orchestration layer — they tell Claude Code **what to do** step
 
 ## Development
 
+To contribute to seedrank itself, clone the repo and install in editable mode:
+
 ```bash
 git clone https://github.com/hidden-salmon/seedrank.git
 cd seedrank
@@ -491,7 +507,7 @@ ruff check src/seedrank/ tests/
 src/seedrank/
 ├── cli/                 # Typer CLI commands
 │   ├── __init__.py      # App definition + sub-app registration
-│   ├── init_cmd.py      # seedrank init (workspace + DB + CLAUDE.md)
+│   ├── init_cmd.py      # seedrank init (workspace + DB + .claude/seedrank.md)
 │   ├── status.py        # seedrank status
 │   ├── research.py      # seedrank research (keywords, serp, competitors, expand, geo, questions)
 │   ├── data.py          # seedrank data (keywords, gaps, articles, performance, calendar, questions, geo)
