@@ -154,14 +154,21 @@ def check_disparaging_words(
     findings: list[LegalFinding] = []
     for disp_word in disparaging:
         for dm in re.finditer(re.escape(disp_word), content_lower):
-            if _near_competitor(content_lower, dm.start(), dm.end(), competitor_names_lower, window=100):
+            near = _near_competitor(
+                content_lower, dm.start(), dm.end(),
+                competitor_names_lower, window=100,
+            )
+            if near:
                 findings.append(LegalFinding(
                     level=RiskLevel.RED,
                     check="legal_red_disparaging",
                     message=f"RED: Potentially disparaging '{disp_word}' near competitor name",
                     framework=LegalFramework.LANHAM_ACT,
                     statement=disp_word,
-                    recommended_fix=f"Remove '{disp_word}' or replace with objective, sourced observation.",
+                    recommended_fix=(
+                        f"Remove '{disp_word}' or replace with "
+                        "objective, sourced observation."
+                    ),
                 ))
                 break  # One per disparaging word
     return findings
@@ -305,7 +312,10 @@ def check_trademark_misuse(
                 message=f"RED: Trademark misuse — '{name}-like' implies imitation",
                 framework=LegalFramework.EU_DIRECTIVE,
                 statement=f"{name}-like",
-                recommended_fix=f"Replace with 'similar to {name}' or describe the specific feature.",
+                recommended_fix=(
+                    f"Replace with 'similar to {name}' or "
+                    "describe the specific feature."
+                ),
             ))
 
         # "better X" (standalone, not "better than X")
@@ -329,7 +339,10 @@ def check_trademark_misuse(
                 message=f"YELLOW: '{name}' mentioned {count} times (threshold: {max_mentions})",
                 framework=LegalFramework.EU_DIRECTIVE,
                 statement=f"{name} x{count}",
-                recommended_fix="Reduce mentions — excessive use may imply unfair advantage of trademark.",
+                recommended_fix=(
+                    "Reduce mentions — excessive use may imply "
+                    "unfair advantage of trademark."
+                ),
             ))
 
     return findings
@@ -354,14 +367,21 @@ def check_implied_deficiency(
     findings: list[LegalFinding] = []
     for pat in patterns:
         for m in re.finditer(re.escape(pat), content_lower):
-            if _near_competitor(content_lower, m.start(), m.end(), competitor_names_lower, window=200):
+            near = _near_competitor(
+                content_lower, m.start(), m.end(),
+                competitor_names_lower, window=200,
+            )
+            if near:
                 findings.append(LegalFinding(
                     level=RiskLevel.YELLOW,
                     check="legal_yellow_implied_deficiency",
                     message=f"YELLOW: Implied deficiency '{pat}' near competitor name",
                     framework=LegalFramework.LANHAM_ACT,
                     statement=pat,
-                    recommended_fix="State your feature positively without implying competitor lacks it.",
+                    recommended_fix=(
+                        "State your feature positively without "
+                        "implying competitor lacks it."
+                    ),
                 ))
                 break  # One per pattern
     return findings
@@ -382,12 +402,19 @@ def check_opinion_as_fact(
         r"is\s+buggy",
         r"is\s+unusable",
     ]
-    hedges = ["in our testing", "in our experience", "we found", "we noticed", "we observed", "some users report"]
+    hedges = [
+        "in our testing", "in our experience", "we found",
+        "we noticed", "we observed", "some users report",
+    ]
     findings: list[LegalFinding] = []
 
     for pat in opinion_patterns:
         for m in re.finditer(pat, content_lower):
-            if _near_competitor(content_lower, m.start(), m.end(), competitor_names_lower, window=150):
+            near = _near_competitor(
+                content_lower, m.start(), m.end(),
+                competitor_names_lower, window=150,
+            )
+            if near:
                 # Check for hedge phrases nearby
                 start = max(0, m.start() - 150)
                 end = min(len(content_lower), m.end() + 150)
@@ -396,10 +423,16 @@ def check_opinion_as_fact(
                     findings.append(LegalFinding(
                         level=RiskLevel.YELLOW,
                         check="legal_yellow_opinion_as_fact",
-                        message=f"YELLOW: Opinion presented as fact: '{m.group()}' near competitor",
+                        message=(
+                            f"YELLOW: Opinion presented as fact: "
+                            f"'{m.group()}' near competitor"
+                        ),
                         framework=LegalFramework.LANHAM_ACT,
                         statement=m.group(),
-                        recommended_fix="Add 'in our testing' or 'we found' to frame as observation.",
+                        recommended_fix=(
+                            "Add 'in our testing' or 'we found' "
+                            "to frame as observation."
+                        ),
                     ))
                     break  # One per pattern
     return findings
@@ -423,12 +456,19 @@ def check_outdated_claims(
         r"does\s+not\s+include",
         r"no\s+support\s+for",
     ]
-    date_scopes = ["as of", "when we checked", "when we last checked", "last verified", "at the time of writing"]
+    date_scopes = [
+        "as of", "when we checked", "when we last checked",
+        "last verified", "at the time of writing",
+    ]
     findings: list[LegalFinding] = []
 
     for pat in claim_patterns:
         for m in re.finditer(pat, content_lower):
-            if _near_competitor(content_lower, m.start(), m.end(), competitor_names_lower, window=150):
+            near = _near_competitor(
+                content_lower, m.start(), m.end(),
+                competitor_names_lower, window=150,
+            )
+            if near:
                 start = max(0, m.start() - 150)
                 end = min(len(content_lower), m.end() + 150)
                 context = content_lower[start:end]
@@ -436,7 +476,10 @@ def check_outdated_claims(
                     findings.append(LegalFinding(
                         level=RiskLevel.YELLOW,
                         check="legal_yellow_outdated_claim",
-                        message=f"YELLOW: Potentially outdated claim '{m.group()}' near competitor without date",
+                        message=(
+                            f"YELLOW: Potentially outdated claim "
+                            f"'{m.group()}' near competitor without date"
+                        ),
                         framework=LegalFramework.LANHAM_ACT,
                         statement=m.group(),
                         recommended_fix="Add 'as of [date]' to scope the claim.",
@@ -522,8 +565,14 @@ def check_pricing_specificity(
 ) -> list[LegalFinding]:
     """YELLOW: '$X' near competitor name without plan tier or billing period."""
     findings: list[LegalFinding] = []
-    billing_markers = ["/mo", "/yr", "/year", "/month", "per month", "per year", "annually", "monthly"]
-    tier_markers = ["plan", "tier", "starter", "pro", "premium", "enterprise", "basic", "free"]
+    billing_markers = [
+        "/mo", "/yr", "/year", "/month",
+        "per month", "per year", "annually", "monthly",
+    ]
+    tier_markers = [
+        "plan", "tier", "starter", "pro",
+        "premium", "enterprise", "basic", "free",
+    ]
 
     for m in re.finditer(r"\$\d+", content):
         if _near_competitor(content_lower, m.start(), m.end(), competitor_names_lower, window=150):
@@ -546,7 +595,10 @@ def check_pricing_specificity(
                     ),
                     framework=LegalFramework.LANHAM_ACT,
                     statement=m.group(),
-                    recommended_fix="Add specific plan name and billing period (e.g., 'Pro plan, $49/mo').",
+                    recommended_fix=(
+                        "Add specific plan name and billing period "
+                        "(e.g., 'Pro plan, $49/mo')."
+                    ),
                 ))
                 break  # One warning is enough
     return findings
@@ -565,14 +617,24 @@ def check_eu_denigration(
     findings: list[LegalFinding] = []
     for word in eu_words:
         for m in re.finditer(re.escape(word), content_lower):
-            if _near_competitor(content_lower, m.start(), m.end(), competitor_names_lower, window=150):
+            near = _near_competitor(
+                content_lower, m.start(), m.end(),
+                competitor_names_lower, window=150,
+            )
+            if near:
                 findings.append(LegalFinding(
                     level=RiskLevel.YELLOW,
                     check="legal_yellow_eu_denigration",
-                    message=f"YELLOW: EU denigration risk — '{word}' near competitor name",
+                    message=(
+                        f"YELLOW: EU denigration risk — "
+                        f"'{word}' near competitor name"
+                    ),
                     framework=LegalFramework.EU_DIRECTIVE,
                     statement=word,
-                    recommended_fix="Remove denigrating language. EU law prohibits discrediting competitors even if true.",
+                    recommended_fix=(
+                        "Remove denigrating language. EU law prohibits "
+                        "discrediting competitors even if true."
+                    ),
                 ))
                 break  # One per word
     return findings
@@ -632,10 +694,16 @@ def check_trademark_in_headings(
                         findings.append(LegalFinding(
                             level=RiskLevel.YELLOW,
                             check="legal_yellow_trademark_heading",
-                            message=f"YELLOW: Competitor name with negative modifier in heading: '{m.group(1)}'",
+                            message=(
+                                "YELLOW: Competitor name with negative "
+                                f"modifier in heading: '{m.group(1)}'"
+                            ),
                             framework=LegalFramework.LANHAM_ACT,
                             statement=m.group(1),
-                            recommended_fix="Rephrase heading to be neutral (e.g., 'Comparing X and Y').",
+                            recommended_fix=(
+                                "Rephrase heading to be neutral "
+                                "(e.g., 'Comparing X and Y')."
+                            ),
                         ))
                         break
                 break  # Only check one competitor per heading
@@ -651,14 +719,24 @@ def check_screenshot_fair_use(
     """YELLOW: Image references near competitor names."""
     findings: list[LegalFinding] = []
     for m in re.finditer(r"!\[([^\]]*)\]\(([^)]+)\)", content):
-        if _near_competitor(content_lower, m.start(), m.end(), competitor_names_lower, window=200):
+        near = _near_competitor(
+            content_lower, m.start(), m.end(),
+            competitor_names_lower, window=200,
+        )
+        if near:
             findings.append(LegalFinding(
                 level=RiskLevel.YELLOW,
                 check="legal_yellow_screenshot_fair_use",
-                message=f"YELLOW: Image near competitor name — verify fair use: '{m.group(2)[:60]}'",
+                message=(
+                    "YELLOW: Image near competitor name — "
+                    f"verify fair use: '{m.group(2)[:60]}'"
+                ),
                 framework=LegalFramework.GENERAL,
                 statement=m.group(0)[:80],
-                recommended_fix="Ensure screenshot use is fair use. Prefer your own images or clearly attribute.",
+                recommended_fix=(
+                    "Ensure screenshot use is fair use. "
+                    "Prefer your own images or clearly attribute."
+                ),
             ))
     return findings
 
@@ -668,7 +746,10 @@ def check_screenshot_fair_use(
 # ===========================================================================
 
 
-def compute_checklist_score(findings: list[LegalFinding], content_lower: str) -> tuple[int, list[str]]:
+def compute_checklist_score(
+    findings: list[LegalFinding],
+    content_lower: str,
+) -> tuple[int, list[str]]:
     """Compute the 12-item checklist score based on findings.
 
     Returns (score out of 12, list of failed item descriptions).
@@ -685,7 +766,8 @@ def compute_checklist_score(findings: list[LegalFinding], content_lower: str) ->
         failed.append(_CHECKLIST_ITEMS[1])
 
     # Item 3: Dated comparisons — fails if missing methodology or no "as of"/"last verified"
-    has_date = any(d in content_lower for d in ["as of", "last verified", "last updated", "last checked"])
+    date_markers = ["as of", "last verified", "last updated", "last checked"]
+    has_date = any(d in content_lower for d in date_markers)
     if not has_date:
         failed.append(_CHECKLIST_ITEMS[2])
 
@@ -709,7 +791,10 @@ def compute_checklist_score(findings: list[LegalFinding], content_lower: str) ->
     if "legal_red_trademark_misuse" in checks:
         # Check specifically for imitation patterns
         for f in findings:
-            if f.check == "legal_red_trademark_misuse" and ("like" in f.statement.lower() or "killer" in f.statement.lower()):
+            stmt = f.statement.lower()
+            if f.check == "legal_red_trademark_misuse" and (
+                "like" in stmt or "killer" in stmt
+            ):
                 failed.append(_CHECKLIST_ITEMS[7])
                 break
 
@@ -774,7 +859,9 @@ def run_legal_checks(
     if has_competitors:
         findings.extend(check_disparaging_words(content_lower, names_lower, extra_disparaging))
         findings.extend(check_performance_claims(content_lower))
-        findings.extend(check_trademark_misuse(content, content_lower, names, names_lower, max_mentions))
+        findings.extend(check_trademark_misuse(
+            content, content_lower, names, names_lower, max_mentions,
+        ))
 
         if cfg.legal.implied_deficiency_check:
             findings.extend(check_implied_deficiency(content_lower, names_lower))

@@ -10,27 +10,19 @@ from seedrank.cli.legal_checks import (
     LegalReport,
     RiskLevel,
     check_cherry_picked_comparison,
-    check_disparaging_words,
     check_eu_denigration,
-    check_exclusivity_claims,
     check_implied_deficiency,
     check_missing_methodology,
-    check_multiplier_claims,
     check_opinion_as_fact,
     check_outdated_claims,
-    check_performance_claims,
     check_pricing_specificity,
     check_screenshot_fair_use,
     check_trademark_in_headings,
     check_trademark_misuse,
-    check_unattributed_stats,
-    check_undated_pricing,
-    check_unscoped_best,
     compute_checklist_score,
     run_legal_checks,
 )
 from seedrank.config.schema import Competitor, ProductConfig, PseoConfig
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -139,7 +131,11 @@ class TestTrademarkMisuse:
         findings = check_trademark_misuse(
             "better than RivalApp", "better than rivalapp", *names,
         )
-        tm_findings = [f for f in findings if "better" in f.message.lower() and "implies replacement" in f.message]
+        tm_findings = [
+            f for f in findings
+            if "better" in f.message.lower()
+            and "implies replacement" in f.message
+        ]
         assert len(tm_findings) == 0
 
     def test_excessive_mentions(self, names: tuple) -> None:
@@ -285,6 +281,12 @@ class TestOutdatedClaims:
 # ===========================================================================
 
 
+_CHERRY_CHECKS = (
+    "legal_yellow_cherry_picked_onesided",
+    "legal_yellow_cherry_picked_toomany",
+)
+
+
 class TestCherryPickedComparison:
     def test_too_many_rows(self) -> None:
         header = "| Feature | Us | Them |"
@@ -292,7 +294,7 @@ class TestCherryPickedComparison:
         rows = "\n".join(f"| Feature {i} | ✅ | ❌ |" for i in range(10))
         content = f"{header}\n{sep}\n{rows}"
         findings = check_cherry_picked_comparison(content)
-        assert any(f.check in ("legal_yellow_cherry_picked_onesided", "legal_yellow_cherry_picked_toomany") for f in findings)
+        assert any(f.check in _CHERRY_CHECKS for f in findings)
 
     def test_balanced_table_passes(self) -> None:
         content = (
@@ -317,7 +319,7 @@ class TestCherryPickedComparison:
             "| Docs | ✅ | ❌ |\n"
         )
         findings = check_cherry_picked_comparison(content)
-        assert any(f.check in ("legal_yellow_cherry_picked_onesided", "legal_yellow_cherry_picked_toomany") for f in findings)
+        assert any(f.check in _CHERRY_CHECKS for f in findings)
 
     def test_no_table_clean(self) -> None:
         content = "Just a regular article without tables."
@@ -519,17 +521,19 @@ class TestChecklistScorer:
         assert len(failed) == 0
 
     def test_low_score(self) -> None:
+        def _f(level: RiskLevel, check: str, **kw: str) -> LegalFinding:
+            return LegalFinding(level=level, check=check, message="m", **kw)
+
         findings = [
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_outdated_claim", message="m"),
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_undated_pricing", message="m"),
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_opinion_as_fact", message="m"),
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_cherry_picked_onesided", message="m"),
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_cherry_picked_toomany", message="m"),
-            LegalFinding(level=RiskLevel.RED, check="legal_red_trademark_misuse", message="m",
-                         statement="rivalapp-like"),
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_implied_deficiency", message="m"),
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_unattributed_stat", message="m"),
-            LegalFinding(level=RiskLevel.YELLOW, check="legal_yellow_unscoped_best", message="m"),
+            _f(RiskLevel.YELLOW, "legal_yellow_outdated_claim"),
+            _f(RiskLevel.YELLOW, "legal_yellow_undated_pricing"),
+            _f(RiskLevel.YELLOW, "legal_yellow_opinion_as_fact"),
+            _f(RiskLevel.YELLOW, "legal_yellow_cherry_picked_onesided"),
+            _f(RiskLevel.YELLOW, "legal_yellow_cherry_picked_toomany"),
+            _f(RiskLevel.RED, "legal_red_trademark_misuse", statement="rivalapp-like"),
+            _f(RiskLevel.YELLOW, "legal_yellow_implied_deficiency"),
+            _f(RiskLevel.YELLOW, "legal_yellow_unattributed_stat"),
+            _f(RiskLevel.YELLOW, "legal_yellow_unscoped_best"),
         ]
         score, failed = compute_checklist_score(findings, "no dates here")
         assert score <= 3

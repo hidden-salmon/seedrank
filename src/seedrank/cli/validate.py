@@ -6,10 +6,14 @@ import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 
 from seedrank.config.schema import PseoConfig
+
+if TYPE_CHECKING:
+    from seedrank.cli.legal_checks import LegalReport
 from seedrank.utils.console import console, error, heading, info, success, warning
 
 validate_app = typer.Typer(help="Validation commands.", no_args_is_help=True)
@@ -441,12 +445,12 @@ def _check_legal(
                 })
 
 
-def _render_legal_report(report: "LegalReport") -> None:
+def _render_legal_report(report: LegalReport) -> None:
     """Render a detailed legal compliance report using Rich."""
     from rich.panel import Panel
     from rich.table import Table
 
-    from seedrank.cli.legal_checks import LegalReport, RiskLevel
+    from seedrank.cli.legal_checks import RiskLevel
 
     # Summary panel
     risk_colors = {RiskLevel.RED: "red", RiskLevel.YELLOW: "yellow", RiskLevel.GREEN: "green"}
@@ -890,7 +894,7 @@ def validate_legal(
         from seedrank.cli.legal_checks import run_legal_checks
 
         comparison_articles = _find_comparison_articles(conn, cfg, workspace)
-        article_reports: list[tuple[str, "LegalReport"]] = []
+        article_reports: list[tuple[str, LegalReport]] = []
         use_eu = eu_checks or cfg.legal.eu_checks_enabled
 
         if comparison_articles:
@@ -919,7 +923,10 @@ def validate_legal(
                         red = sum(1 for f in report.findings if f.level.value == "error")
                         yellow = sum(1 for f in report.findings if f.level.value == "warning")
                         if red:
-                            error(f"Article '{slug}': {red} high-risk, {yellow} medium-risk finding(s)")
+                            error(
+                                f"Article '{slug}': {red} high-risk, "
+                                f"{yellow} medium-risk finding(s)"
+                            )
                         else:
                             warning(f"Article '{slug}': {yellow} medium-risk finding(s)")
                         issues += red + yellow
