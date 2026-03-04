@@ -49,6 +49,24 @@ class TestDataForSEOClient:
         assert len(items) == 1
         assert items[0]["keyword"] == "test"
 
+    def test_extract_results_direct_format(self) -> None:
+        """Google Ads Search Volume returns keyword data directly in result[], not nested in items."""
+        config = DataForSeoConfig(login="user", password="pass")
+        client = DataForSEOClient(config)
+        tasks = [
+            {
+                "status_code": 20000,
+                "result": [
+                    {"keyword": "fzf", "search_volume": 4400, "competition": "LOW"},
+                    {"keyword": "ripgrep", "search_volume": 2900, "competition": "LOW"},
+                ],
+            }
+        ]
+        items = client._extract_results(tasks)
+        assert len(items) == 2
+        assert items[0]["keyword"] == "fzf"
+        assert items[1]["keyword"] == "ripgrep"
+
     def test_extract_results_skips_errors(self) -> None:
         config = DataForSeoConfig(login="user", password="pass")
         client = DataForSEOClient(config)
@@ -65,6 +83,7 @@ class TestDataForSEOClient:
 
     @patch("seedrank.research.dataforseo.httpx.Client")
     def test_fetch_keyword_overview(self, mock_client_cls: MagicMock) -> None:
+        """Google Ads Search Volume endpoint returns data directly in result[]."""
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "status_code": 20000,
@@ -73,17 +92,13 @@ class TestDataForSEOClient:
                     "status_code": 20000,
                     "result": [
                         {
-                            "items": [
-                                {
-                                    "keyword": "email marketing",
-                                    "search_volume": 5000,
-                                    "keyword_difficulty": 45,
-                                    "cpc": 2.5,
-                                    "competition": 0.8,
-                                    "search_intent": {"main": "informational"},
-                                    "serp_features": ["featured_snippet"],
-                                }
-                            ]
+                            "keyword": "email marketing",
+                            "search_volume": 5000,
+                            "keyword_difficulty": 45,
+                            "cpc": 2.5,
+                            "competition": 0.8,
+                            "search_intent": {"main": "informational"},
+                            "serp_features": ["featured_snippet"],
                         }
                     ],
                 }

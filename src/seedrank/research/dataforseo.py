@@ -50,13 +50,22 @@ class DataForSEOClient:
         return result.get("tasks", [])
 
     def _extract_results(self, tasks: list[dict]) -> list[dict]:
-        """Extract result items from DataForSEO task response."""
+        """Extract result items from DataForSEO task response.
+
+        Handles two response formats:
+        - Nested: result[].items[] (Labs endpoints, SERP endpoints)
+        - Direct: result[] contains data directly (Google Ads Search Volume)
+        """
         items = []
         for task in tasks:
             if task.get("status_code") != 20000:
                 continue
             for result_set in task.get("result", []):
-                if result_set and "items" in result_set:
+                if not result_set:
+                    continue
+                if "keyword" in result_set:
+                    items.append(result_set)
+                elif "items" in result_set:
                     items.extend(result_set["items"] or [])
         return items
 
