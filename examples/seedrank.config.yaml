@@ -130,6 +130,14 @@ legal:
   corrections_email: "corrections@moonbeam.example.com"
   data_staleness_days: 90
   require_affiliate_disclosure: false
+
+  # Legal checks for competitor content
+  eu_checks_enabled: false          # Enable EU/German unfair competition law checks
+  trademark_max_mentions: 15        # Flag if competitor name appears more than this many times
+  implied_deficiency_check: true    # Check for "no hidden fees" etc. near competitor names
+  require_comparison_methodology: true  # Require methodology section in comparison articles
+  additional_disparaging_words: []  # Extra words to flag as disparaging (e.g. ["cheap", "bloated"])
+
   comparison:
     require_source_urls: true
     require_last_verified: true

@@ -106,6 +106,10 @@ def validate_article(
         help="Path to config file (for voice/legal rules).",
     ),
     as_json: bool = typer.Option(False, "--json", help="Output results as JSON."),
+    eu_checks: bool = typer.Option(False, "--eu-checks", help="Include EU/German law checks."),
+    legal_report: bool = typer.Option(
+        False, "--legal-report", help="Show detailed legal report with checklist."
+    ),
 ) -> None:
     """Validate an article — word count, links, voice, legal compliance."""
     heading("Validate Article")
@@ -158,10 +162,18 @@ def validate_article(
     _check_structure(content, issues)
     _check_ai_tells(content, content_lower, issues)
 
+    report = None
     if cfg:
         _check_voice(content, content_lower, cfg, issues)
         _check_legal(content, content_lower, cfg, issues)
-        _check_legal_tiers(content, content_lower, cfg, issues)
+
+        # Run legal tier checks via new module
+        from seedrank.cli.legal_checks import run_legal_checks
+
+        use_eu = eu_checks or getattr(cfg.legal, "eu_checks_enabled", False)
+        report = run_legal_checks(content, cfg, eu_checks=use_eu)
+        issues.extend(report.to_issues_list())
+
         _check_citability(content, content_lower, issues)
 
         # Content-type-aware word count override
@@ -180,6 +192,24 @@ def validate_article(
             "issues": issues,
             "pass": all(i["level"] != "error" for i in issues),
         }
+        if report:
+            result["legal_report"] = {
+                "overall_risk": report.overall_risk.value,
+                "checklist_score": report.checklist_score,
+                "checklist_total": report.checklist_total,
+                "checklist_failures": report.checklist_failures,
+                "findings": [
+                    {
+                        "level": f.level.value,
+                        "check": f.check,
+                        "message": f.message,
+                        "framework": f.framework.value,
+                        "statement": f.statement,
+                        "recommended_fix": f.recommended_fix,
+                    }
+                    for f in report.findings
+                ],
+            }
         typer.echo(json.dumps(result, indent=2))
     else:
         for issue in issues:
@@ -199,6 +229,10 @@ def validate_article(
             error(f"Validation failed — {len(issues)} issue(s)")
         else:
             warning(f"Passed with {len(issues)} warning(s)")
+
+        # Render detailed legal report if requested
+        if legal_report and report:
+            _render_legal_report(report)
 
     console.print()
 
@@ -456,111 +490,54 @@ def _check_legal(
                 })
 
 
-def _check_legal_tiers(
-    content: str,
-    content_lower: str,
-    cfg: PseoConfig,
-    issues: list[dict],
-) -> None:
-    """Check legal compliance using RED/YELLOW/GREEN tier classification."""
-    competitor_names = [c.name for c in cfg.competitors]
-    competitor_names_lower = [n.lower() for n in competitor_names]
+def _render_legal_report(report: "LegalReport") -> None:
+    """Render a detailed legal compliance report using Rich."""
+    from rich.panel import Panel
+    from rich.table import Table
 
-    # --- RED tier patterns (errors, must fix) ---
+    from seedrank.cli.legal_checks import LegalReport, RiskLevel
 
-    # Multiplier claims: "3x cheaper", "10x faster"
-    for m in re.finditer(r"\b\d+x\s+(cheaper|faster|better|more\s+\w+)\b", content_lower):
-        issues.append({
-            "level": "error",
-            "check": "legal_red_multiplier",
-            "message": f"RED: Multiplier claim found: '{m.group()}'",
-        })
+    # Summary panel
+    risk_colors = {RiskLevel.RED: "red", RiskLevel.YELLOW: "yellow", RiskLevel.GREEN: "green"}
+    risk_label = {RiskLevel.RED: "HIGH", RiskLevel.YELLOW: "MEDIUM", RiskLevel.GREEN: "LOW"}
+    risk = report.overall_risk
+    color = risk_colors[risk]
 
-    # Disparaging words near competitor names
-    disparaging = [
-        "limited", "basic", "outdated", "opaque", "stagnated",
-        "went downhill", "can't match", "clunky", "disappointing",
-    ]
-    for disp_word in disparaging:
-        for dm in re.finditer(re.escape(disp_word), content_lower):
-            # Only flag if within 100 chars of a competitor name
-            start = max(0, dm.start() - 100)
-            end = min(len(content_lower), dm.end() + 100)
-            window = content_lower[start:end]
-            if any(cn in window for cn in competitor_names_lower):
-                issues.append({
-                    "level": "error",
-                    "check": "legal_red_disparaging",
-                    "message": f"RED: Potentially disparaging '{disp_word}' near competitor name",
-                })
-                break  # One per disparaging word is enough
+    red_count = sum(1 for f in report.findings if f.level == RiskLevel.RED)
+    yellow_count = sum(1 for f in report.findings if f.level == RiskLevel.YELLOW)
 
-    # Unhedged exclusivity: "the only platform that..."
-    for m in re.finditer(
-        r"\b(?:the\s+)?only\s+(?:platform|tool|service|product|solution)\s+that\b",
-        content_lower,
-    ):
-        start = max(0, m.start() - 50)
-        end = min(len(content_lower), m.end() + 50)
-        context = content_lower[start:end]
-        if not any(hedge in context for hedge in ["we are aware of", "as of", "to our knowledge"]):
-            issues.append({
-                "level": "error",
-                "check": "legal_red_exclusivity",
-                "message": f"RED: Unhedged exclusivity claim: '{m.group()}'",
-            })
+    summary = (
+        f"[bold {color}]Overall Risk: {risk_label[risk]}[/]\n"
+        f"Findings: {red_count} high, {yellow_count} medium\n"
+        f"Checklist: {report.checklist_score}/{report.checklist_total}"
+    )
+    console.print(Panel(summary, title="Legal Compliance Report", border_style=color))
 
-    # Performance claims without benchmarks
-    for m in re.finditer(r"\b(faster|slower|quicker|more efficient)\s+than\b", content_lower):
-        start = max(0, m.start() - 100)
-        end = min(len(content_lower), m.end() + 100)
-        context = content_lower[start:end]
-        benchmark_words = ["benchmark", "test", "measured", "ms", "seconds", "%"]
-        has_benchmark = any(w in context for w in benchmark_words)
-        if not has_benchmark:
-            issues.append({
-                "level": "error",
-                "check": "legal_red_performance",
-                "message": f"RED: Performance claim without benchmark: '{m.group()}'",
-            })
+    # Findings table
+    if report.findings:
+        table = Table(title="Findings", show_lines=True)
+        table.add_column("Level", style="bold", width=8)
+        table.add_column("Check", width=30)
+        table.add_column("Message")
+        table.add_column("Fix", width=40)
 
-    # --- YELLOW tier patterns (warnings, should fix) ---
+        for f in report.findings:
+            lvl_color = "red" if f.level == RiskLevel.RED else "yellow"
+            table.add_row(
+                f"[{lvl_color}]{f.level.name}[/]",
+                f.check,
+                f.message,
+                f.recommended_fix or "",
+            )
+        console.print(table)
 
-    # Unattributed statistics
-    stat_pattern = r"\b\d[\d,]*\+?\s*(?:users|developers|customers|downloads|stars)\b"
-    for m in re.finditer(stat_pattern, content_lower):
-        start = max(0, m.start() - 80)
-        end = min(len(content_lower), m.end() + 80)
-        context = content_lower[start:end]
-        attributed = any(w in context for w in ["per", "according to", "reports", "source:"])
-        has_link = bool(re.search(r"\[.*?\]\(https?://", content[start:end]))
-        if not attributed and not has_link:
-            issues.append({
-                "level": "warning",
-                "check": "legal_yellow_unattributed_stat",
-                "message": f"YELLOW: Unattributed statistic: '{m.group()}'",
-            })
-
-    # Unscoped "best"
-    for m in re.finditer(r"\bbest\s+(?:for|alternative|option|choice|platform)\b", content_lower):
-        issues.append({
-            "level": "warning",
-            "check": "legal_yellow_unscoped_best",
-            "message": f"YELLOW: Unscoped 'best' claim: '{m.group()}'",
-        })
-
-    # Undated pricing
-    for m in re.finditer(r"\$\d+", content):
-        start = max(0, m.start() - 80)
-        end = min(len(content), m.end() + 80)
-        context = content_lower[start:end]
-        if "as of" not in context:
-            issues.append({
-                "level": "warning",
-                "check": "legal_yellow_undated_pricing",
-                "message": f"YELLOW: Pricing without 'as of' date near: '{m.group()}'",
-            })
-            break  # One warning is enough
+    # Checklist failures
+    if report.checklist_failures:
+        console.print("\n[bold]Checklist failures:[/]")
+        for item in report.checklist_failures:
+            console.print(f"  [red]✗[/] {item}")
+    elif report.checklist_score == 12:
+        console.print("\n[green]All 12 checklist items passed.[/]")
 
 
 def _check_citability(content: str, content_lower: str, issues: list[dict]) -> None:
@@ -867,6 +844,13 @@ def validate_legal(
         "-c",
         help="Path to config file.",
     ),
+    format: str = typer.Option(
+        "summary",
+        "--format",
+        "-f",
+        help="Output format: 'summary' or 'detailed'.",
+    ),
+    eu_checks: bool = typer.Option(False, "--eu-checks", help="Include EU/German law checks."),
 ) -> None:
     """Check legal compliance across the workspace — data staleness, coverage."""
     heading("Legal Compliance Check")
@@ -934,15 +918,21 @@ def validate_legal(
             warning(f"{stale_serp} SERP snapshot(s) are stale (>{stale_days} days)")
             issues += 1
 
-        # Check for comparison articles missing disclaimers
+        # Check for comparison articles missing disclaimers + run content checks
+        from seedrank.cli.legal_checks import run_legal_checks
+
         comparison_articles = _find_comparison_articles(conn, cfg, workspace)
+        article_reports: list[tuple[str, "LegalReport"]] = []
+        use_eu = eu_checks or getattr(cfg.legal, "eu_checks_enabled", False)
+
         if comparison_articles:
             info(f"Found {len(comparison_articles)} comparison article(s) to audit")
             for slug, path in comparison_articles:
                 if path and Path(path).exists():
-                    article_content = Path(path).read_text(encoding="utf-8").lower()
+                    article_content = Path(path).read_text(encoding="utf-8")
+                    article_lower = article_content.lower()
                     has_disclaimer = any(
-                        m in article_content
+                        m in article_lower
                         for m in [
                             "editorial note",
                             "disclaimer",
@@ -953,6 +943,18 @@ def validate_legal(
                     if not has_disclaimer:
                         warning(f"Article '{slug}' is a comparison without disclaimer")
                         issues += 1
+
+                    # Run legal checks on article content
+                    report = run_legal_checks(article_content, cfg, eu_checks=use_eu)
+                    if report.findings:
+                        article_reports.append((slug, report))
+                        red = sum(1 for f in report.findings if f.level.value == "error")
+                        yellow = sum(1 for f in report.findings if f.level.value == "warning")
+                        if red:
+                            error(f"Article '{slug}': {red} high-risk, {yellow} medium-risk finding(s)")
+                        else:
+                            warning(f"Article '{slug}': {yellow} medium-risk finding(s)")
+                        issues += red + yellow
 
     # Config completeness
     if not cfg.legal.corrections_email:
@@ -968,6 +970,12 @@ def validate_legal(
         success("All legal checks passed.")
     else:
         warning(f"Legal audit found {issues} issue(s) to address")
+
+    # Detailed format: render per-article legal reports
+    if format == "detailed" and article_reports:
+        for slug, report in article_reports:
+            console.print(f"\n[bold]--- {slug} ---[/]")
+            _render_legal_report(report)
 
 
 def _find_comparison_articles(
