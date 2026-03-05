@@ -134,6 +134,11 @@ def data_articles(
 def data_performance(
     as_json: bool = typer.Option(False, "--json", help="Output as JSON."),
     days: int = typer.Option(30, "--days", "-d", help="Number of days to show."),
+    slug: str = typer.Option("", "--slug", help="Show daily data for a specific article."),
+    declining: bool = typer.Option(
+        False, "--declining",
+        help="Show articles with declining traffic.",
+    ),
     underperformers: bool = typer.Option(
         False, "--underperformers", "-u",
         help="Show only underperformers (high impressions, low CTR).",
@@ -142,7 +147,12 @@ def data_performance(
 ) -> None:
     """Show article performance from GSC data."""
     from seedrank.data.db import connect, get_db_path
-    from seedrank.data.performance import get_performance, get_underperformers
+    from seedrank.data.performance import (
+        get_declining_articles,
+        get_performance,
+        get_performance_for_slug,
+        get_underperformers,
+    )
 
     db_path = get_db_path(workspace.resolve())
     if not db_path.exists():
@@ -150,7 +160,11 @@ def data_performance(
         raise typer.Exit(1)
 
     with connect(db_path) as conn:
-        if underperformers:
+        if slug:
+            rows = get_performance_for_slug(conn, slug=slug, days=days)
+        elif declining:
+            rows = get_declining_articles(conn, days=days)
+        elif underperformers:
             rows = get_underperformers(conn, days=days)
         else:
             rows = get_performance(conn, days=days)
@@ -159,30 +173,151 @@ def data_performance(
         _json_output(rows)
         return
 
-    title = "Underperformers" if underperformers else "Performance"
+    if slug:
+        title = f"Performance: {slug}"
+    elif declining:
+        title = "Declining Articles"
+    elif underperformers:
+        title = "Underperformers"
+    else:
+        title = "Performance"
+
     heading(title)
     if not rows:
-        if underperformers:
+        if slug:
+            info(f"No performance data for '{slug}'.")
+        elif declining:
+            info("No declining articles found.")
+        elif underperformers:
             info("No underperformers found.")
         else:
             info("No performance data. Sync GSC data with 'seedrank gsc sync'.")
         return
 
-    table_rows = [
-        [
-            r["slug"],
-            str(r.get("impressions", 0)),
-            str(r.get("clicks", 0)),
-            f"{r.get('position_avg', 0):.1f}",
-            f"{(r.get('ctr', 0) or 0) * 100:.1f}%",
+    if slug:
+        table_rows = [
+            [
+                r["date"],
+                str(r.get("impressions", 0)),
+                str(r.get("clicks", 0)),
+                f"{r.get('position_avg', 0):.1f}",
+                f"{(r.get('ctr', 0) or 0) * 100:.1f}%",
+            ]
+            for r in rows
         ]
-        for r in rows
-    ]
-    render_table(
-        f"{title} (last {days}d)",
-        ["Slug", "Impressions", "Clicks", "Avg Pos", "CTR"],
-        table_rows,
-    )
+        render_table(
+            f"{title} (last {days}d)",
+            ["Date", "Impressions", "Clicks", "Avg Pos", "CTR"],
+            table_rows,
+        )
+    elif declining:
+        table_rows = [
+            [
+                r["slug"],
+                str(r.get("prior_impressions", 0)),
+                str(r.get("recent_impressions", 0)),
+                f"{r.get('impressions_change_pct', 0):+.1f}%",
+                f"{r.get('clicks_change_pct', 0):+.1f}%",
+            ]
+            for r in rows
+        ]
+        render_table(
+            f"{title} (last {days}d)",
+            ["Slug", "Prior Impr", "Recent Impr", "Impr %", "Clicks %"],
+            table_rows,
+        )
+    else:
+        table_rows = [
+            [
+                r["slug"],
+                str(r.get("impressions", 0)),
+                str(r.get("clicks", 0)),
+                f"{r.get('position_avg', 0):.1f}",
+                f"{(r.get('ctr', 0) or 0) * 100:.1f}%",
+            ]
+            for r in rows
+        ]
+        render_table(
+            f"{title} (last {days}d)",
+            ["Slug", "Impressions", "Clicks", "Avg Pos", "CTR"],
+            table_rows,
+        )
+
+
+@data_app.command(name="links")
+def data_links(
+    as_json: bool = typer.Option(False, "--json", help="Output as JSON."),
+    orphans: bool = typer.Option(
+        False, "--orphans",
+        help="Show only articles with zero inbound links.",
+    ),
+    stats: bool = typer.Option(
+        False, "--stats",
+        help="Show per-article inbound/outbound link counts.",
+    ),
+    workspace: Path = typer.Option(Path("."), "--workspace", "-w", help="Workspace root."),
+) -> None:
+    """Show internal link graph data."""
+    from seedrank.data.db import connect, get_db_path
+    from seedrank.data.links import get_all_links, get_link_stats, get_orphan_articles
+
+    db_path = get_db_path(workspace.resolve())
+    if not db_path.exists():
+        error("Database not found. Run 'seedrank init' first.")
+        raise typer.Exit(1)
+
+    with connect(db_path) as conn:
+        if orphans:
+            rows = get_orphan_articles(conn)
+        elif stats:
+            rows = get_link_stats(conn)
+        else:
+            rows = get_all_links(conn)
+
+    if as_json:
+        _json_output(rows)
+        return
+
+    if orphans:
+        heading("Orphan Articles (no inbound links)")
+        if not rows:
+            info("No orphan articles found.")
+            return
+        table_rows = [
+            [r["slug"], r.get("title", "—"), r.get("published_at") or "—"]
+            for r in rows
+        ]
+        render_table("Orphans", ["Slug", "Title", "Published"], table_rows)
+    elif stats:
+        heading("Link Stats")
+        if not rows:
+            info("No published articles.")
+            return
+        table_rows = [
+            [
+                r["slug"],
+                str(r.get("outbound_links", 0)),
+                str(r.get("inbound_links", 0)),
+            ]
+            for r in rows
+        ]
+        render_table(
+            "Link Stats", ["Slug", "Outbound", "Inbound"], table_rows
+        )
+    else:
+        heading("All Links")
+        if not rows:
+            info("No links registered. Use 'seedrank articles crosslinks' to find suggestions.")
+            return
+        table_rows = [
+            [
+                r["from_slug"],
+                r["to_slug"],
+                r.get("anchor_text") or "—",
+            ]
+            for r in rows
+        ]
+        render_table("Links", ["From", "To", "Anchor"], table_rows)
 
 
 @data_app.command(name="costs")

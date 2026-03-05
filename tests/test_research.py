@@ -50,7 +50,8 @@ class TestDataForSEOClient:
         assert items[0]["keyword"] == "test"
 
     def test_extract_results_direct_format(self) -> None:
-        """Google Ads Search Volume returns keyword data directly in result[], not nested in items."""
+        """Google Ads Search Volume returns keyword data directly in result[],
+        not nested in items."""
         config = DataForSeoConfig(login="user", password="pass")
         client = DataForSEOClient(config)
         tasks = [

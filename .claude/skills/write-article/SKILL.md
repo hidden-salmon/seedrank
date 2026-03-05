@@ -199,6 +199,14 @@ Update the calendar status:
 seedrank calendar update $ARGUMENTS --status done
 ```
 
+Generate structured data for the article:
+
+```
+seedrank articles schema $ARGUMENTS --json
+```
+
+Include the JSON-LD in the article output or note it for the user to add to their site template.
+
 Check for backward links:
 
 ```

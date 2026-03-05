@@ -133,6 +133,137 @@ def articles_crosslinks(
         render_table(f"{dir_name.title()} Links", ["Slug", "Title", "Score"], table_rows)
 
 
+@articles_app.command(name="schema")
+def articles_schema(
+    slug: str = typer.Argument(help="Article slug to generate schema for."),
+    as_json: bool = typer.Option(True, "--json/--no-json", help="Output as JSON (default)."),
+    workspace: Path = typer.Option(Path("."), "--workspace", "-w", help="Workspace root."),
+) -> None:
+    """Generate JSON-LD structured data for an article."""
+    from datetime import date as date_type
+
+    from seedrank.data.db import connect, get_db_path
+
+    db_path = get_db_path(workspace.resolve())
+    if not db_path.exists():
+        error("Database not found. Run 'seedrank init' first.")
+        raise typer.Exit(1)
+
+    # Load config for Organization and content type info
+    config_path = workspace.resolve() / "seedrank.config.yaml"
+    org_name = ""
+    org_domain = ""
+    org_logo = ""
+    content_route = "/blog/[slug]"
+    if config_path.exists():
+        try:
+            from seedrank.config.loader import load_config
+
+            cfg = load_config(config_path)
+            org_name = cfg.product.name
+            org_domain = cfg.product.domain
+            for ct in cfg.content_types:
+                if ct.slug == "blog":
+                    content_route = ct.route
+                    break
+        except Exception:
+            pass
+
+    with connect(db_path) as conn:
+        article = conn.execute(
+            "SELECT * FROM articles WHERE slug = ?", (slug,)
+        ).fetchone()
+
+    if not article:
+        error(f"Article '{slug}' not found in database.")
+        raise typer.Exit(1)
+
+    article = dict(article)
+    today = date_type.today().isoformat()
+    published = article.get("published_at") or today
+    url = article.get("url") or ""
+    if not url and org_domain:
+        url_path = content_route.replace("[slug]", slug)
+        url = f"https://{org_domain}{url_path}"
+
+    # Build Article/BlogPosting schema
+    article_schema: dict = {
+        "@type": "BlogPosting",
+        "headline": article.get("title", slug),
+        "datePublished": published,
+        "dateModified": article.get("updated_at") or today,
+        "url": url,
+    }
+    if org_name:
+        article_schema["author"] = {
+            "@type": "Organization",
+            "name": org_name,
+        }
+        article_schema["publisher"] = {
+            "@type": "Organization",
+            "name": org_name,
+        }
+        if org_logo:
+            article_schema["publisher"]["logo"] = {
+                "@type": "ImageObject",
+                "url": org_logo,
+            }
+
+    kws = article.get("target_keywords", "[]")
+    if isinstance(kws, str):
+        import json as json_mod
+
+        kws = json_mod.loads(kws)
+    if kws:
+        article_schema["keywords"] = kws
+
+    # Build BreadcrumbList
+    breadcrumb_schema: dict = {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Home",
+                "item": f"https://{org_domain}/" if org_domain else "/",
+            },
+            {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Blog",
+                "item": (
+                    f"https://{org_domain}/blog/"
+                    if org_domain
+                    else "/blog/"
+                ),
+            },
+            {
+                "@type": "ListItem",
+                "position": 3,
+                "name": article.get("title", slug),
+                "item": url,
+            },
+        ],
+    }
+
+    # Assemble @graph
+    graph: dict = {
+        "@context": "https://schema.org",
+        "@graph": [article_schema, breadcrumb_schema],
+    }
+
+    # Add Organization if we have config
+    if org_name and org_domain:
+        org_schema: dict = {
+            "@type": "Organization",
+            "name": org_name,
+            "url": f"https://{org_domain}/",
+        }
+        graph["@graph"].append(org_schema)
+
+    console.print_json(json.dumps(graph, indent=2, default=str))
+
+
 @articles_app.command(name="backlinks")
 def articles_backlinks(
     slug: str = typer.Argument(help="Article slug."),
