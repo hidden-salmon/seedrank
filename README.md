@@ -146,12 +146,13 @@ All data commands support `--json` for structured output that Claude Code can pa
 | `seedrank data keywords` | List all keywords with volume, KD, CPC, intent |
 | `seedrank data gaps` | Keywords competitors rank for that you don't cover |
 | `seedrank data articles` | List all registered articles |
-| `seedrank data performance` | Aggregated GSC metrics per article |
+| `seedrank data performance` | Aggregated GSC metrics per article (`--slug`, `--declining`, `--underperformers`) |
 | `seedrank data calendar` | Content calendar sorted by priority |
 | `seedrank data questions` | List discovered questions with status and source |
 | `seedrank data geo` | GEO query results — brand mentions, sentiment, citations |
 | `seedrank data geo-trends` | Brand mention rate over time, grouped by week |
 | `seedrank data geo-gaps` | Queries where competitors appear but your brand doesn't |
+| `seedrank data links` | Internal link graph: all links, orphans (`--orphans`), or stats (`--stats`) |
 | `seedrank data costs` | API spend tracking by provider and endpoint |
 
 ### Content management
@@ -164,6 +165,7 @@ All data commands support `--json` for structured output that Claude Code can pa
 | `seedrank articles crosslinks <slug> --direction forward` | Articles this slug should link to |
 | `seedrank articles crosslinks <slug> --direction backward` | Articles that should link to this slug |
 | `seedrank articles backlinks <slug>` | Shorthand for `--direction backward` |
+| `seedrank articles schema <slug>` | Generate JSON-LD structured data (BlogPosting + BreadcrumbList + Organization) |
 
 ### Content calendar
 
@@ -462,12 +464,16 @@ Seedrank includes Claude Code skills — predefined workflows that orchestrate m
 | Skill | Description |
 |---|---|
 | `/research-session "seed keywords"` | Full research workflow: fetch keywords, expand, analyze competitors, identify gaps |
-| `/write-article <slug>` | Write a complete article with crosslinks, voice compliance, and legal checks |
-| `/review-article <path>` | Review an article: voice, legal, SEO, crosslinks, structured checklist |
-| `/audit-legal` | Workspace-wide legal compliance audit |
 | `/plan-calendar [count]` | Analyze gaps and build a prioritized content calendar |
+| `/write-article <slug>` | Write a complete article with crosslinks, voice, legal checks, and schema markup |
+| `/batch-articles <count>` | Write multiple articles in parallel with shared context |
+| `/review-article <path>` | 10-dimension article audit before publishing |
+| `/refresh-article <slug>` | Diagnose and refresh declining content using GSC decay signals |
+| `/optimize-links` | Analyze internal link graph — find orphans, map clusters, generate linking plan |
+| `/generate-schema <slug>` | Generate JSON-LD structured data (BlogPosting, FAQPage, BreadcrumbList) |
 | `/geo-optimize <path>` | Optimize an article for AI model citability (C1-C5 checks + fixes) |
 | `/qa-ai-tells <path>` | Detect AI writing tells — crutch phrases, tricolons, hedging, meta-commentary |
+| `/audit-legal` | Workspace-wide legal compliance audit (RED/YELLOW/GREEN tiers) |
 | `/aeo-monitor` | Run periodic AI visibility monitoring — track brand mentions over time |
 
 ### Typical workflow
@@ -479,6 +485,9 @@ Seedrank includes Claude Code skills — predefined workflows that orchestrate m
 > /review-article content/compare/mailchimp-vs-moonbeam.mdx
 > /qa-ai-tells content/compare/mailchimp-vs-moonbeam.mdx
 > /audit-legal
+> /optimize-links                  (after publishing 10+ articles)
+> /refresh-article declining-slug  (monthly, for content losing traffic)
+> /aeo-monitor                     (weekly AI visibility check)
 ```
 
 Skills are the orchestration layer — they tell Claude Code **what to do** step by step, while the CLI commands are the **tools** that do the mechanical work.
@@ -529,8 +538,9 @@ src/seedrank/
 │   ├── competitors.py   # Competitor JSON profile management
 │   ├── costs.py         # API cost tracking
 │   ├── geo.py           # GEO trends, gaps, competitor leaderboard
+│   ├── links.py         # Link graph queries (orphans, stats)
 │   ├── migrations.py    # Database schema migrations
-│   └── performance.py   # GSC performance data
+│   └── performance.py   # GSC performance data + decay detection
 ├── research/
 │   ├── dataforseo.py    # DataForSEO API client
 │   ├── geo.py           # Multi-provider GEO query client

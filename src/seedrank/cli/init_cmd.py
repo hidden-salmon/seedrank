@@ -123,15 +123,21 @@ All structured data lives in `data/seedrank.db` (SQLite). Use the `seedrank` com
 - `seedrank articles update <slug> --status published --url "/blog/slug"` — Update article
 - `seedrank articles crosslinks <slug> --json` — Get crosslink suggestions
 - `seedrank articles backlinks <slug> --json` — Get backward link suggestions
+- `seedrank articles schema <slug> --json` — Generate JSON-LD structured data (BlogPosting + BreadcrumbList + Organization)
 
 ### Calendar
 - `seedrank calendar add <slug> --keywords "k1, k2"` — Add to calendar
 - `seedrank calendar next --count 5 --json` — Get next priority items
 - `seedrank calendar update <slug> --status writing` — Update calendar status
 
-### Performance
+### Performance & Links
 - `seedrank gsc auth` — Authenticate with Google Search Console
 - `seedrank gsc sync --days 30` — Sync performance data
+- `seedrank data performance --slug <slug> --json` — Daily performance data for one article
+- `seedrank data performance --declining --json` — Find articles with declining traffic
+- `seedrank data links --json` — Dump full internal link graph
+- `seedrank data links --orphans --json` — Find published articles with zero inbound links
+- `seedrank data links --stats --json` — Per-article inbound/outbound link counts
 
 ### Validation
 - `seedrank validate config` — Validate config file
@@ -171,21 +177,28 @@ These skills orchestrate multi-step workflows. Use them for complete tasks:
 | Skill | What it does |
 |---|---|
 | `/research-session "seed keywords"` | Full research workflow: discover questions, fetch keywords, analyze competitors, identify gaps |
-| `/write-article <slug>` | Two-pass article writing: verify competitor data first, then write with voice/legal/citability compliance |
-| `/review-article <path>` | 9-dimension audit: question coverage, fact-check, legal tiers, citability, cross-batch consistency |
-| `/audit-legal` | Tiered legal audit: RED/YELLOW/GREEN classification, disclaimer templates, competitor lawyer test |
-| `/geo-optimize <path>` | Optimize article for AI citability: C1-C5 checks, FAQ targeting, answer-first rewrites |
-| `/aeo-monitor` | Periodic AI visibility monitoring: query AI models, track mention trends, identify gaps |
 | `/plan-calendar [count]` | Analyze gaps, design article plan, add to calendar with auto-priority scoring |
+| `/write-article <slug>` | Two-pass article writing: verify competitor data first, then write with voice/legal/citability compliance + schema markup |
+| `/batch-articles <count>` | Write multiple articles in parallel with shared context |
+| `/review-article <path>` | 10-dimension audit: question coverage, fact-check, legal tiers, citability, cross-batch consistency |
+| `/refresh-article <slug>` | Diagnose and refresh declining content: analyze GSC decay signals, update stale content, re-validate |
+| `/optimize-links` | Analyze full internal link graph: find orphans, map topic clusters, generate prioritized linking plan |
+| `/generate-schema <slug>` | Generate JSON-LD structured data: BlogPosting, FAQPage, BreadcrumbList, Organization |
+| `/geo-optimize <path>` | Optimize article for AI citability: C1-C5 checks, FAQ targeting, answer-first rewrites |
+| `/qa-ai-tells <path>` | Detect AI writing tells: crutch phrases, tricolons, hedging, meta-commentary |
+| `/audit-legal` | Tiered legal audit: RED/YELLOW/GREEN classification, disclaimer templates, competitor lawyer test |
+| `/aeo-monitor` | Periodic AI visibility monitoring: query AI models, track mention trends, identify gaps |
 
 **Typical workflow using skills:**
 1. `/research-session "email marketing, newsletter tools"` — discover questions + build keyword foundation
 2. `/plan-calendar 10` — decide what to write and in what order
-3. `/write-article mailchimp-vs-moonbeam` — verify data, then write the top-priority article
-4. `/review-article content/compare/mailchimp-vs-moonbeam.mdx` — 9-dimension audit before publishing
+3. `/write-article mailchimp-vs-moonbeam` — verify data, write, generate schema markup
+4. `/review-article content/compare/mailchimp-vs-moonbeam.mdx` — 10-dimension audit before publishing
 5. `/geo-optimize content/compare/mailchimp-vs-moonbeam.mdx` — optimize for AI citation
 6. `/audit-legal` — periodic tiered compliance check across all content
-7. `/aeo-monitor` — weekly AI visibility monitoring
+7. `/optimize-links` — analyze link graph, fix orphans, strengthen clusters (after 10+ articles)
+8. `/refresh-article declining-slug` — revive articles losing traffic (monthly)
+9. `/aeo-monitor` — weekly AI visibility monitoring
 
 ---
 
